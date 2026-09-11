@@ -123,8 +123,10 @@ export const VoiceMicButton: React.FC<VoiceMicButtonProps> = ({
       );
     }
 
-    // Coba tebak kategori dari kata kunci histori
-    let suggestedCategoryId: string | null = null;
+    // Tampilkan form konfirmasi LANGSUNG tanpa nunggu API suggest-category
+    onParsedResult(parsed, null);
+
+    // Coba tebak kategori di background (non-blocking)
     try {
       const res = await fetch("/api/voice/suggest-category", {
         method: "POST",
@@ -132,17 +134,14 @@ export const VoiceMicButton: React.FC<VoiceMicButtonProps> = ({
         body: JSON.stringify({ rawInput: text }),
       });
       const data = await res.json();
-      if (data.data?.categoryId) {
-        suggestedCategoryId = data.data.categoryId;
-      }
-      if (data.data?.type) {
-        parsed.type = data.data.type;
+      if (data.data?.categoryId || data.data?.type) {
+        // Update form dengan sugesti kategori jika tersedia
+        if (data.data?.type) parsed.type = data.data.type;
+        onParsedResult(parsed, data.data?.categoryId || null);
       }
     } catch {
-      // Abaikan jika suggestion gagal
+      // Abaikan jika suggestion gagal — form sudah terbuka
     }
-
-    onParsedResult(parsed, suggestedCategoryId);
   };
 
   // Saat transkrip selesai berbicara dan listening selesai
