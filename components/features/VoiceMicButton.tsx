@@ -97,10 +97,6 @@ export const VoiceMicButton: React.FC<VoiceMicButtonProps> = ({
 
     if (isListening) {
       recognitionRef.current.stop();
-      setIsListening(false);
-      if (transcript.trim()) {
-        await processTranscript(transcript);
-      }
     } else {
       try {
         setTranscript("");
