@@ -211,6 +211,7 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({
   const [progress, setProgress] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -271,7 +272,7 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose} title="Pindai Resi Pembelian">
       <div className="flex flex-col flex-1 min-h-0 relative">
-        <div className="flex-1 overflow-y-auto px-5 py-6 flex flex-col items-center space-y-4 pb-36 text-center">
+        <div className="flex-1 overflow-y-auto px-5 py-6 flex flex-col items-center space-y-4 pb-44 text-center">
           {errorMessage && (
             <div className="w-full p-3 bg-expense/10 text-expense text-[13px] font-medium rounded-control text-left">
               {errorMessage}
@@ -300,6 +301,17 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({
             </div>
           )}
 
+          {/* Input file untuk kamera (dengan capture) */}
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            capture="environment"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+
+          {/* Input file untuk galeri (tanpa capture) */}
           <input
             ref={fileInputRef}
             type="file"
@@ -315,20 +327,29 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({
             variant="primary"
             fullWidth
             isLoading={isLoading}
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => cameraInputRef.current?.click()}
           >
-            {isLoading ? progress || "Membaca Resi..." : "Ambil Foto / Pilih dari Galeri"}
+            {isLoading ? progress || "Membaca Resi..." : "📸 Ambil Foto dengan Kamera"}
           </Button>
 
           <Button
             type="button"
             variant="secondary"
             fullWidth
+            disabled={isLoading}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            🖼️ Pilih dari Galeri
+          </Button>
+
+          <button
+            type="button"
+            className="w-full py-2.5 text-[14px] font-medium text-text-secondary hover:text-text transition-colors"
             onClick={onClose}
             disabled={isLoading}
           >
             Batal
-          </Button>
+          </button>
         </div>
       </div>
     </BottomSheet>
