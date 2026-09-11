@@ -1,0 +1,132 @@
+// schema.prisma — Finance Tracker
+// Skema final, gabungan seluruh model dari desain-sistem-finance-tracker.md + PRD.md
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")   // pooled connection (pgbouncer, port 6543) — dipakai runtime app
+  directUrl = env("DIRECT_URL")     // direct connection (port 5432) — dipakai migrasi (prisma migrate)
+}
+
+model User {
+  id              String            @id // sama dengan auth.users.id dari Supabase Auth (UUID) — bukan default cuid()
+  email           String            @unique // mirror dari auth.users.email, untuk kemudahan query/join
+  name            String?
+  wallets         Wallet[]
+  categories      Category[]
+  transactions    Transaction[]
+  transfers       Transfer[]
+  categoryKeywords CategoryKeyword[]
+  createdAt       DateTime          @default(now())
+}
+
+model Wallet {
+  id             String        @id @default(cuid())
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  type           WalletType
+  icon           String?
+  color          String?
+  balance        Decimal       @default(0) @db.Decimal(14, 2)
+  isArchived     Boolean       @default(false)
+  transactions   Transaction[]
+  transfersFrom  Transfer[]    @relation("TransferFrom")
+  transfersTo    Transfer[]    @relation("TransferTo")
+  createdAt      DateTime      @default(now())
+
+  @@index([userId])
+}
+
+enum WalletType {
+  CASH
+  EWALLET
+  BANK
+  OTHER
+}
+
+model Category {
+  id           String            @id @default(cuid())
+  userId       String
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  icon         String?
+  type         TransactionType
+  budgetLimit  Decimal?          @db.Decimal(14, 2)
+  budgetPeriod BudgetPeriod      @default(MONTHLY)
+  transactions Transaction[]
+  keywords     CategoryKeyword[]
+  createdAt    DateTime          @default(now())
+
+  @@index([userId])
+}
+
+enum BudgetPeriod {
+  WEEKLY
+  MONTHLY
+}
+
+model Transaction {
+  id              String          @id @default(cuid())
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  walletId        String
+  wallet          Wallet          @relation(fields: [walletId], references: [id])
+  categoryId      String?
+  category        Category?       @relation(fields: [categoryId], references: [id])
+  type            TransactionType
+  amount          Decimal         @db.Decimal(14, 2)
+  note            String?
+  source          InputSource
+  rawInput        String?
+  receiptImageUrl String?
+  transactionDate DateTime        @default(now())
+  createdAt       DateTime        @default(now())
+
+  @@index([userId, transactionDate])
+  @@index([walletId])
+  @@index([categoryId])
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum InputSource {
+  VOICE
+  MANUAL
+  RECEIPT_SCAN
+}
+
+model Transfer {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fromWalletId String
+  fromWallet   Wallet   @relation("TransferFrom", fields: [fromWalletId], references: [id])
+  toWalletId   String
+  toWallet     Wallet   @relation("TransferTo", fields: [toWalletId], references: [id])
+  amount       Decimal  @db.Decimal(14, 2)
+  note         String?
+  transferDate DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+}
+
+model CategoryKeyword {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  keyword    String
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  frequency  Int      @default(1)
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, keyword, categoryId])
+}
