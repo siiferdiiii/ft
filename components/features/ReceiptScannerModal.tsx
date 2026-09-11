@@ -92,7 +92,6 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({
             ref={fileInputRef}
             type="file"
             accept="image/jpeg,image/png,image/webp"
-            capture="environment"
             onChange={handleFileChange}
             className="hidden"
           />
