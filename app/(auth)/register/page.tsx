@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
@@ -14,6 +14,18 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Jika user sudah pernah mendaftar / sudah login, langsung lempar ke dashboard
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      if (
+        localStorage.getItem("ft_logged_in") === "true" ||
+        document.cookie.includes("ft_logged_in=true")
+      ) {
+        router.replace("/dashboard");
+      }
+    }
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,7 +61,13 @@ export default function RegisterPage() {
         return;
       }
 
-      // 2. Auto login di client tanpa konfirmasi email (PRD §3)
+      // 2. Simpan status login permanen agar tidak kembali ke /register saat reload / buka PWA
+      if (typeof window !== "undefined") {
+        localStorage.setItem("ft_logged_in", "true");
+        document.cookie = "ft_logged_in=true; path=/; max-age=31536000; SameSite=Lax";
+      }
+
+      // 3. Auto login di client tanpa konfirmasi email (PRD §3)
       try {
         const supabase = createClient();
         await supabase.auth.signInWithPassword({

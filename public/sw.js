@@ -1,15 +1,13 @@
-const CACHE_NAME = "finance-tracker-v1";
+const CACHE_NAME = "finance-tracker-v2";
 const STATIC_ASSETS = [
-  "/",
-  "/dashboard",
-  "/login",
-  "/register",
   "/icon-192.png",
   "/icon-512.png",
+  "/icon-maskable.png",
+  "/apple-touch-icon.png",
   "/icon.svg",
 ];
 
-// Install Event: cache core shell assets
+// Install Event: cache core static icons only
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -21,7 +19,7 @@ self.addEventListener("install", (event) => {
   self.skipWaiting();
 });
 
-// Activate Event: clean up old caches
+// Activate Event: purge all old caches (v1, etc.)
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -37,11 +35,11 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Fetch Event: Stale-While-Revalidate for navigations and static files
+// Fetch Event: Network-First for navigations, Cache-First for static assets
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  // Jangan cache request API / POST / dynamic DB mutations
+  // 1. Jangan intersep request non-GET, API, atau upload
   if (
     event.request.method !== "GET" ||
     url.pathname.startsWith("/api/") ||
@@ -50,27 +48,35 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      const fetchPromise = fetch(event.request)
-        .then((networkResponse) => {
-          if (
-            networkResponse &&
-            networkResponse.status === 200 &&
-            networkResponse.type === "basic"
-          ) {
-            const responseToCache = networkResponse.clone();
+  // 2. Navigasi halaman HTML (/, /dashboard, /register, dll) SELALU Network-First!
+  // JANGAN PERNAH menyajikan cache redirect HTML basi agar user tidak terlempar ke /register.
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request).catch(() => {
+        return caches.match(event.request);
+      })
+    );
+    return;
+  }
+
+  // 3. Cache-First hanya untuk aset statis (gambar, font, css chunk)
+  if (
+    url.pathname.match(/\.(png|jpg|jpeg|svg|webp|ico|woff2?)$/) ||
+    url.pathname.startsWith("/_next/static/")
+  ) {
+    event.respondWith(
+      caches.match(event.request).then((cachedResponse) => {
+        if (cachedResponse) return cachedResponse;
+        return fetch(event.request).then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const clone = networkResponse.clone();
             caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseToCache);
+              cache.put(event.request, clone);
             });
           }
           return networkResponse;
-        })
-        .catch(() => {
-          return cachedResponse;
         });
-
-      return cachedResponse || fetchPromise;
-    })
-  );
+      })
+    );
+  }
 });

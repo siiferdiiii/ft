@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
@@ -13,6 +13,18 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Jika sudah pernah login, langsung masuk ke dashboard
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      if (
+        localStorage.getItem("ft_logged_in") === "true" ||
+        document.cookie.includes("ft_logged_in=true")
+      ) {
+        router.replace("/dashboard");
+      }
+    }
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,6 +41,14 @@ export default function LoginPage() {
     }
 
     setIsLoading(true);
+
+    const markLoggedIn = () => {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("ft_logged_in", "true");
+        document.cookie = "ft_logged_in=true; path=/; max-age=31536000; SameSite=Lax";
+      }
+    };
+
     try {
       const supabase = createClient();
       const { error } = await supabase.auth.signInWithPassword({
@@ -42,6 +62,7 @@ export default function LoginPage() {
           error.message?.toLowerCase().includes("fetch failed")
         ) {
           // Supabase belum terkonfigurasi/offline, izinkan masuk mode demo/lokal
+          markLoggedIn();
           router.push("/dashboard");
           router.refresh();
           return;
@@ -51,10 +72,12 @@ export default function LoginPage() {
         return;
       }
 
+      markLoggedIn();
       router.push("/dashboard");
       router.refresh();
     } catch {
       // Fallback untuk mode development lokal
+      markLoggedIn();
       router.push("/dashboard");
     } finally {
       setIsLoading(false);

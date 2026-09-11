@@ -1,21 +1,55 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+"use client";
 
-export default async function HomePage() {
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser();
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
-    if (user && !error) {
-      redirect("/dashboard");
+/**
+ * Root page — menentukan apakah user sudah login atau belum.
+ *
+ * Dibuat client component agar bisa baca localStorage secara langsung.
+ * Ini krusial untuk PWA karena cookies dari `document.cookie` kadang
+ * tidak persist di PWA Android setelah restart, tapi localStorage selalu persist.
+ */
+export default function HomePage() {
+  const router = useRouter();
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    const hasLocalFlag = localStorage.getItem("ft_logged_in") === "true";
+    const hasCookieFlag = document.cookie.includes("ft_logged_in=true");
+
+    // Cek juga Supabase auth cookies
+    const hasSupabaseCookie = document.cookie
+      .split(";")
+      .some(
+        (c) =>
+          c.trim().startsWith("sb-") || c.trim().includes("auth-token")
+      );
+
+    if (hasLocalFlag || hasCookieFlag || hasSupabaseCookie) {
+      // Sudah login → dashboard
+      router.replace("/dashboard");
+    } else {
+      // Belum login → register
+      router.replace("/register");
     }
-  } catch {
-    // Jika tidak ada session atau koneksi belum ada, arahkan ke registrasi
+
+    setChecking(false);
+  }, [router]);
+
+  // Tampilkan splash screen singkat saat mengecek status
+  if (checking) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center gap-3">
+        <div className="w-12 h-12 rounded-card-wallet bg-primary text-white font-bold text-xl flex items-center justify-center shadow-none animate-pulse">
+          FT
+        </div>
+        <p className="text-[13px] text-text-secondary animate-pulse">
+          Memuat...
+        </p>
+      </div>
+    );
   }
 
-  // Pengguna baru / pertama kali buka aplikasi langsung masuk ke halaman registrasi
-  redirect("/register");
+  return null;
 }

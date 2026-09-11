@@ -104,6 +104,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         // Jika sudah ada cache, UI langsung bisa dipakai (0ms delay)
         if (hasCachedData) {
           setIsInitialLoading(false);
+          localStorage.setItem("ft_logged_in", "true");
+          document.cookie = "ft_logged_in=true; path=/; max-age=31536000; SameSite=Lax";
         }
       } catch (err) {
         console.warn("Gagal membaca cache lokal:", err);

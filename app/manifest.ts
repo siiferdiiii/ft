@@ -7,6 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description:
       "Aplikasi pencatatan keuangan harian cerdas dengan input suara instan dan scan resi OCR.",
     start_url: "/dashboard",
+    scope: "/",
+    id: "/dashboard",
     display: "standalone",
     background_color: "#0D0D17",
     theme_color: "#5E5CE6",
