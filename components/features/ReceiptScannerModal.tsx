@@ -14,16 +14,16 @@ interface ReceiptScannerModalProps {
 }
 
 /**
- * Resize gambar di canvas agar lebih kecil & cepat diproses OCR.
- * Target: max 1200px sisi terpanjang, JPEG quality 0.7
+ * Preprocess gambar untuk OCR: resize + grayscale + tingkatkan kontras.
+ * Ini meningkatkan akurasi Tesseract.js secara drastis.
  */
-function resizeImageForOCR(file: File): Promise<Blob> {
+function preprocessImageForOCR(file: File): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
       URL.revokeObjectURL(url);
-      const MAX = 1200;
+      const MAX = 1600;
       let w = img.width;
       let h = img.height;
       if (w > MAX || h > MAX) {
@@ -34,11 +34,29 @@ function resizeImageForOCR(file: File): Promise<Blob> {
       canvas.width = w;
       canvas.height = h;
       const ctx = canvas.getContext("2d")!;
+
+      // Gambar asli
       ctx.drawImage(img, 0, 0, w, h);
+
+      // Ambil pixel data untuk preprocessing
+      const imageData = ctx.getImageData(0, 0, w, h);
+      const data = imageData.data;
+
+      for (let i = 0; i < data.length; i += 4) {
+        // Convert ke grayscale
+        const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        // Tingkatkan kontras (threshold-based binarization untuk teks)
+        const val = gray > 140 ? 255 : 0;
+        data[i] = val;
+        data[i + 1] = val;
+        data[i + 2] = val;
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+
       canvas.toBlob(
         (blob) => blob ? resolve(blob) : reject(new Error("Canvas toBlob failed")),
-        "image/jpeg",
-        0.7
+        "image/png" // PNG tanpa kompresi agar teks tajam
       );
     };
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Image load failed")); };
@@ -48,7 +66,7 @@ function resizeImageForOCR(file: File): Promise<Blob> {
 
 /**
  * Parsing teks resi untuk mengeluarkan amount, merchant, dan tanggal.
- * Sama persis logikanya dengan versi server sebelumnya.
+ * Logika parsing yang lebih cerdas — prioritaskan "Total" di atas "Rp" standalone.
  */
 function parseReceiptText(text: string) {
   let amount: number | null = null;
@@ -57,28 +75,78 @@ function parseReceiptText(text: string) {
 
   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
 
-  // Merchant biasanya di 1-2 baris pertama
-  if (lines.length > 0) {
-    const firstLine = lines[0].replace(/[^\w\s]/g, "").trim();
-    if (firstLine.length > 2 && firstLine.length < 40) {
-      merchant = firstLine;
+  // === MERCHANT DETECTION ===
+  // Cari nama toko/merchant — biasanya ada kata kunci tertentu
+  const merchantKeywords = /(?:toko|oleh|penjual|merchant|store|shop|galeri|seller|outlet)/i;
+  for (const line of lines) {
+    if (merchantKeywords.test(line)) {
+      // Bersihkan karakter aneh, ambil text setelah keyword
+      const cleaned = line
+        .replace(/[^\w\s\-&.]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (cleaned.length > 3 && cleaned.length < 60) {
+        merchant = cleaned;
+        break;
+      }
     }
   }
 
-  // Cari pola TOTAL / JUMLAH / RP
-  const totalRegex = /(?:total|jumlah|grand total|rp|subtotal)\s*[:.=]?\s*([0-9.,]+)/i;
-  const numberRegex = /\b(\d{1,3}(?:[.,]\d{3})+|\d{4,})\b/g;
-
-  const totalMatch = text.match(totalRegex);
-  if (totalMatch && totalMatch[1]) {
-    const clean = totalMatch[1].replace(/[^\d]/g, "");
-    const val = parseInt(clean, 10);
-    if (val > 0 && val < 1000000000) {
-      amount = val;
+  // Fallback: cari baris pertama yang punya ≥2 huruf kapital berturut & panjang wajar
+  if (!merchant) {
+    for (const line of lines.slice(0, 5)) {
+      const cleaned = line.replace(/[^\w\s\-&.]/g, " ").replace(/\s+/g, " ").trim();
+      // Skip baris yang cuma angka, atau terlalu pendek
+      if (cleaned.length > 3 && cleaned.length < 50 && /[A-Za-z]{2,}/.test(cleaned)) {
+        // Skip baris yang terlihat seperti harga/angka
+        if (!/^\d/.test(cleaned) && !/^rp/i.test(cleaned)) {
+          merchant = cleaned;
+          break;
+        }
+      }
     }
   }
 
+  // === AMOUNT DETECTION ===
+  // Prioritas 1: "Total" diikuti angka (paling akurat untuk resi)
+  const totalPatterns = [
+    /(?:grand\s*total|total\s*(?:bayar|belanja|pembayaran|pesanan|harga|akhir|semua|order|payment))\s*[:.\-=]?\s*(?:rp\.?\s*)?([0-9][0-9.,]*)/i,
+    /(?:total\s*\d+\s*produk)\s*[:.\-=]?\s*(?:rp\.?\s*)?([0-9][0-9.,]*)/i,
+    /(?:total)\s*[:.\-=]?\s*(?:rp\.?\s*)?([0-9][0-9.,]*)/i,
+  ];
+
+  for (const pattern of totalPatterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      const clean = match[1].replace(/[^\d]/g, "");
+      const val = parseInt(clean, 10);
+      if (val > 0 && val < 1000000000) {
+        amount = val;
+        break;
+      }
+    }
+  }
+
+  // Prioritas 2: "Rp" + angka (bukan bagian dari item list, ambil yang paling besar)
   if (!amount) {
+    const rpMatches = text.matchAll(/rp\.?\s*([0-9][0-9.,]*)/gi);
+    const amounts: number[] = [];
+    for (const m of rpMatches) {
+      const clean = m[1].replace(/[^\d]/g, "");
+      const val = parseInt(clean, 10);
+      if (val >= 500 && val < 100000000) {
+        amounts.push(val);
+      }
+    }
+    // Ambil angka terbesar (biasanya total)
+    if (amounts.length > 0) {
+      amount = Math.max(...amounts);
+    }
+  }
+
+  // Prioritas 3: Angka terbesar yang masuk akal
+  if (!amount) {
+    const numberRegex = /\b(\d{1,3}(?:[.,]\d{3})+|\d{4,})\b/g;
     const allNumbers: number[] = [];
     let match;
     while ((match = numberRegex.exec(text)) !== null) {
@@ -93,8 +161,9 @@ function parseReceiptText(text: string) {
     }
   }
 
-  // Cari pola tanggal
-  const dateRegex = /\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b/;
+  // === DATE DETECTION ===
+  // Format: DD/MM/YYYY, DD-MM-YYYY, DD MM YYYY
+  const dateRegex = /\b(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})\b/;
   const dateMatch = text.match(dateRegex);
   if (dateMatch) {
     const day = dateMatch[1].padStart(2, "0");
@@ -104,6 +173,27 @@ function parseReceiptText(text: string) {
     const parsedDate = new Date(`${year}-${month}-${day}`);
     if (!isNaN(parsedDate.getTime())) {
       txDate = parsedDate.toISOString();
+    }
+  }
+
+  // Fallback tanggal: cari nama bulan Indonesia
+  if (!txDate) {
+    const bulanMap: Record<string, string> = {
+      jan: "01", feb: "02", mar: "03", apr: "04", mei: "05", jun: "06",
+      jul: "07", agu: "08", aug: "08", sep: "09", okt: "10", oct: "10",
+      nov: "11", des: "12", dec: "12",
+    };
+    const bulanRegex = /(\d{1,2})\s*(jan|feb|mar|apr|mei|jun|jul|agu|aug|sep|okt|oct|nov|des|dec)\w*\s*(\d{2,4})?/i;
+    const bulanMatch = text.match(bulanRegex);
+    if (bulanMatch) {
+      const day = bulanMatch[1].padStart(2, "0");
+      const monthKey = bulanMatch[2].toLowerCase().slice(0, 3);
+      const month = bulanMap[monthKey] || "01";
+      const year = bulanMatch[3]?.length === 2 ? `20${bulanMatch[3]}` : bulanMatch[3] || new Date().getFullYear().toString();
+      const parsedDate = new Date(`${year}-${month}-${day}`);
+      if (!isNaN(parsedDate.getTime())) {
+        txDate = parsedDate.toISOString();
+      }
     }
   }
 
@@ -132,14 +222,14 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({
     setProgress("Mempersiapkan gambar...");
 
     try {
-      // 1. Resize gambar dulu agar OCR lebih cepat
-      const resized = await resizeImageForOCR(file);
+      // 1. Preprocess: resize + grayscale + binarize untuk OCR lebih akurat
+      const processed = await preprocessImageForOCR(file);
 
       setProgress("Memuat OCR engine...");
 
-      // 2. Jalankan Tesseract.js langsung di browser (Web Worker — tidak blocking UI)
+      // 2. Jalankan Tesseract.js di browser (Web Worker)
       const { createWorker } = await import("tesseract.js");
-      const worker = await createWorker("eng", undefined, {
+      const worker = await createWorker(["eng", "ind"], undefined, {
         logger: (m: { status: string; progress: number }) => {
           if (m.status === "recognizing text") {
             setProgress(`Membaca resi... ${Math.round(m.progress * 100)}%`);
@@ -148,14 +238,14 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({
       });
 
       setProgress("Membaca resi...");
-      const ret = await worker.recognize(resized);
+      const ret = await worker.recognize(processed);
       const text = ret.data.text;
       await worker.terminate();
 
       // 3. Parse hasil OCR
       const { amount, merchant, txDate } = parseReceiptText(text);
 
-      // 4. Buat data URI preview dari gambar asli (bukan resized)
+      // 4. Buat preview URL dari gambar asli
       const previewUrl = URL.createObjectURL(file);
 
       onParsedResult({
