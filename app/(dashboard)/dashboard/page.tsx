@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { WalletCard } from "@/components/features/WalletCard";
 import { VoiceMicButton } from "@/components/features/VoiceMicButton";
 import {
@@ -199,11 +200,11 @@ export default function DashboardPage() {
           <h2 className="text-[14px] font-semibold text-text">
             Transaksi Terbaru
           </h2>
-          <span className="text-[11px] text-text-secondary">10 Terakhir</span>
+          <span className="text-[11px] text-text-secondary">5 Terakhir</span>
         </div>
 
         <div className="bg-surface rounded-card-lg border border-border divide-y divide-border overflow-hidden">
-          {recentTransactions.map((tx) => (
+          {recentTransactions.slice(0, 5).map((tx) => (
             <div
               key={tx.id}
               className="flex items-center justify-between p-3.5 hover:bg-field/50 transition-colors"
@@ -242,6 +243,19 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
+
+        {/* Tombol Lihat Semua Riwayat */}
+        {recentTransactions.length > 0 && (
+          <Link
+            href="/dashboard/riwayat"
+            className="flex items-center justify-center gap-2 mt-3 py-3 bg-surface rounded-card border border-border text-[13px] font-semibold text-primary hover:bg-field/50 active:scale-[0.98] transition-all"
+          >
+            <span>Lihat Semua Riwayat</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 18l6-6-6-6" />
+            </svg>
+          </Link>
+        )}
       </div>
 
       {/* Modal Konfirmasi Transaksi (Voice & Manual) */}

@@ -66,6 +66,9 @@ export async function GET(req: NextRequest) {
     const walletId = searchParams.get("walletId");
     const categoryId = searchParams.get("categoryId");
     const type = searchParams.get("type");
+    const search = searchParams.get("search");
+    const dateFrom = searchParams.get("dateFrom");
+    const dateTo = searchParams.get("dateTo");
 
     const whereClause: Prisma.TransactionWhereInput = {
       userId: user.id,
@@ -75,6 +78,26 @@ export async function GET(req: NextRequest) {
     if (categoryId) whereClause.categoryId = categoryId;
     if (type === "INCOME" || type === "EXPENSE") whereClause.type = type;
 
+    // Filter pencarian berdasarkan catatan atau nominal
+    if (search) {
+      const searchNum = parseInt(search.replace(/[^\d]/g, ""), 10);
+      whereClause.OR = [
+        { note: { contains: search, mode: "insensitive" } },
+        ...(searchNum && !isNaN(searchNum) ? [{ amount: searchNum }] : []),
+      ];
+    }
+
+    // Filter rentang tanggal
+    if (dateFrom || dateTo) {
+      whereClause.transactionDate = {};
+      if (dateFrom) (whereClause.transactionDate as Record<string, Date>).gte = new Date(dateFrom);
+      if (dateTo) {
+        const endDate = new Date(dateTo);
+        endDate.setHours(23, 59, 59, 999);
+        (whereClause.transactionDate as Record<string, Date>).lte = endDate;
+      }
+    }
+
     const transactions = await prisma.transaction.findMany({
       where: whereClause,
       include: {
@@ -82,7 +105,7 @@ export async function GET(req: NextRequest) {
         category: { select: { name: true } },
       },
       orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }],
-      take: Math.min(limit, 100),
+      take: Math.min(limit, 200),
     });
 
     const result: TransactionDto[] = transactions.map((t) => ({
