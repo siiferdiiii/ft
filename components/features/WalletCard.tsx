@@ -2,8 +2,8 @@
 
 import React from "react";
 import { WalletDto } from "@/lib/types";
-import { formatCurrency } from "@/lib/currency";
 import { WalletIcon } from "../ui/Icons";
+import { AnimatedBalance } from "../ui/AnimatedBalance";
 
 interface WalletCardProps {
   wallet: WalletDto;
@@ -49,7 +49,11 @@ export const WalletCard: React.FC<WalletCardProps> = ({
       </div>
 
       <div className="text-[15px] font-bold text-text">
-        {formatCurrency(wallet.balance)}
+        <AnimatedBalance
+          value={wallet.balance}
+          duration={1000}
+          storageKey={`ft_wallet_balance_${wallet.id}`}
+        />
       </div>
     </div>
   );

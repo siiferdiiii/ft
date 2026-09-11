@@ -2,13 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 
-const STORAGE_KEY = "ft_last_seen_balance";
-
 interface AnimatedBalanceProps {
   value: number;
   duration?: number; // ms
   className?: string;
   formatter?: (val: number) => string;
+  /** Key unik untuk menyimpan saldo terakhir di localStorage. Default: "ft_last_seen_balance" */
+  storageKey?: string;
 }
 
 /**
@@ -23,11 +23,12 @@ export function AnimatedBalance({
   duration = 1200,
   className = "",
   formatter,
+  storageKey = "ft_last_seen_balance",
 }: AnimatedBalanceProps) {
   // Baca saldo terakhir yang tersimpan di localStorage (untuk animasi saat kembali ke dashboard)
   const getStoredBalance = (): number => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      const stored = localStorage.getItem(storageKey);
       if (stored !== null) return parseInt(stored, 10) || 0;
     } catch { /* ignore */ }
     return value;
@@ -58,7 +59,7 @@ export function AnimatedBalance({
       setDirection("none");
       setIsAnimating(false);
       // Simpan saldo ke localStorage
-      try { localStorage.setItem(STORAGE_KEY, String(to)); } catch { /* ignore */ }
+      try { localStorage.setItem(storageKey, String(to)); } catch { /* ignore */ }
       return;
     }
 
@@ -99,7 +100,7 @@ export function AnimatedBalance({
         }, 400);
 
         // Simpan saldo terbaru ke localStorage
-        try { localStorage.setItem(STORAGE_KEY, String(to)); } catch { /* ignore */ }
+        try { localStorage.setItem(storageKey, String(to)); } catch { /* ignore */ }
       }
     };
 
