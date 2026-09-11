@@ -10,7 +10,7 @@ import {
 import { ReceiptScannerModal } from "@/components/features/ReceiptScannerModal";
 import { BottomNav } from "@/components/ui/BottomNav";
 import { CameraIcon, PlusIcon } from "@/components/ui/Icons";
-import { WalletDto, CategoryDto, TransactionDto } from "@/lib/types";
+import { WalletDto, CategoryDto, TransactionDto, TransactionType, InputSource } from "@/lib/types";
 import { formatCurrency } from "@/lib/currency";
 import { ParsedVoiceResult } from "@/lib/parseVoiceAmount";
 
@@ -103,6 +103,80 @@ export default function DashboardPage() {
   const handleReceiptResult = (data: PreFillTransactionData) => {
     setPreFillData(data);
     setIsConfirmModalOpen(true);
+  };
+
+  // Handle simpan transaksi secara OPTIMISTIK (Instan 0ms, Tanpa Delay)
+  const handleSaveTransaction = async (txData: {
+    walletId: string;
+    categoryId: string | null;
+    type: TransactionType;
+    amount: number;
+    note: string | null;
+    source: InputSource;
+    rawInput: string | null;
+    receiptImageUrl: string | null;
+    transactionDate: string;
+  }) => {
+    // 1. Snapshot state sebelumnya untuk rollback jika server gagal
+    const prevWallets = [...wallets];
+    const prevTransactions = [...recentTransactions];
+
+    const targetWallet = wallets.find((w) => w.id === txData.walletId) || wallets[0];
+    const targetCategory = categories.find((c) => c.id === txData.categoryId);
+
+    // 2. Pembaruan Saldo Instan di Layar (0ms!)
+    const balanceDiff = txData.type === "INCOME" ? txData.amount : -txData.amount;
+    setWallets((prev) =>
+      prev.map((w) =>
+        w.id === txData.walletId ? { ...w, balance: w.balance + balanceDiff } : w
+      )
+    );
+
+    // 3. Tambahkan Transaksi Baru ke Daftar Paling Atas Secara Instan (0ms!)
+    const tempId = "optimistic-" + Date.now();
+    const optimisticTx: TransactionDto = {
+      id: tempId,
+      walletId: txData.walletId,
+      walletName: targetWallet?.name,
+      categoryId: txData.categoryId,
+      categoryName: targetCategory?.name || null,
+      type: txData.type,
+      amount: txData.amount,
+      note: txData.note,
+      source: txData.source,
+      rawInput: txData.rawInput,
+      receiptImageUrl: txData.receiptImageUrl,
+      transactionDate: txData.transactionDate,
+      createdAt: new Date().toISOString(),
+    };
+    setRecentTransactions((prev) => [optimisticTx, ...prev]);
+
+    // 4. Catat ke Database di Latar Belakang (Background Sync)
+    try {
+      const res = await fetch("/api/transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(txData),
+      });
+
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        throw new Error(json.error?.message || "Gagal mencatat transaksi");
+      }
+
+      // Perbarui ID sementara dengan ID resmi dari database
+      if (json.data?.id) {
+        setRecentTransactions((prev) =>
+          prev.map((t) => (t.id === tempId ? { ...t, id: json.data.id } : t))
+        );
+      }
+    } catch (err) {
+      console.error("Gagal sinkronisasi transaksi:", err);
+      // Rollback ke state sebelumnya jika terjadi error jaringan
+      setWallets(prevWallets);
+      setRecentTransactions(prevTransactions);
+      handleNotification("Gagal menyimpan transaksi ke database. Saldo dikembalikan.");
+    }
   };
 
   const handleNotification = (msg: string) => {
@@ -261,6 +335,7 @@ export default function DashboardPage() {
       <TransactionConfirmModal
         isOpen={isConfirmModalOpen}
         onClose={() => setIsConfirmModalOpen(false)}
+        onSave={handleSaveTransaction}
         onSuccess={loadData}
         wallets={wallets}
         categories={categories}

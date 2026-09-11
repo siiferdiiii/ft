@@ -22,7 +22,18 @@ export interface PreFillTransactionData {
 interface TransactionConfirmModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess?: () => void;
+  onSave?: (data: {
+    walletId: string;
+    categoryId: string | null;
+    type: TransactionType;
+    amount: number;
+    note: string | null;
+    source: InputSource;
+    rawInput: string | null;
+    receiptImageUrl: string | null;
+    transactionDate: string;
+  }) => Promise<void> | void;
   wallets: WalletDto[];
   categories: CategoryDto[];
   initialData: PreFillTransactionData | null;
@@ -32,6 +43,7 @@ export const TransactionConfirmModal: React.FC<TransactionConfirmModalProps> = (
   isOpen,
   onClose,
   onSuccess,
+  onSave,
   wallets,
   categories,
   initialData,
@@ -73,8 +85,28 @@ export const TransactionConfirmModal: React.FC<TransactionConfirmModalProps> = (
       return;
     }
 
-    if (!walletId) {
+    const effectiveWalletId = walletId || (wallets[0]?.id ?? "");
+    if (!effectiveWalletId) {
       setErrorMessage("Pilih dompet untuk transaksi ini");
+      return;
+    }
+
+    const payload = {
+      walletId: effectiveWalletId,
+      categoryId: categoryId || null,
+      type,
+      amount: numericAmount,
+      note: note.trim() || null,
+      source: initialData?.source || "MANUAL",
+      rawInput: initialData?.rawInput || null,
+      receiptImageUrl: initialData?.receiptImageUrl || null,
+      transactionDate: new Date(transactionDate).toISOString(),
+    };
+
+    // Jika mode Optimistic UI aktif, langsung tutup modal & kirim ke state dashboard (0ms!)
+    if (onSave) {
+      onClose();
+      onSave(payload);
       return;
     }
 
@@ -83,17 +115,7 @@ export const TransactionConfirmModal: React.FC<TransactionConfirmModalProps> = (
       const res = await fetch("/api/transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          walletId,
-          categoryId: categoryId || null,
-          type,
-          amount: numericAmount,
-          note: note.trim() || null,
-          source: initialData?.source || "MANUAL",
-          rawInput: initialData?.rawInput || null,
-          receiptImageUrl: initialData?.receiptImageUrl || null,
-          transactionDate: new Date(transactionDate).toISOString(),
-        }),
+        body: JSON.stringify(payload),
       });
 
       const json = await res.json();
@@ -102,7 +124,7 @@ export const TransactionConfirmModal: React.FC<TransactionConfirmModalProps> = (
         return;
       }
 
-      onSuccess();
+      onSuccess?.();
       onClose();
     } catch {
       setErrorMessage("Terjadi gangguan jaringan saat menyimpan transaksi");
