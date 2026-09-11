@@ -12,6 +12,7 @@ import { BottomNav } from "@/components/ui/BottomNav";
 import { CameraIcon, PlusIcon } from "@/components/ui/Icons";
 import { TransactionType, InputSource } from "@/lib/types";
 import { formatCurrency } from "@/lib/currency";
+import { AnimatedBalance } from "@/components/ui/AnimatedBalance";
 import { ParsedVoiceResult } from "@/lib/parseVoiceAmount";
 import { useAppData } from "@/lib/context/AppDataContext";
 
@@ -128,7 +129,9 @@ export default function DashboardPage() {
           Total Kumulasi Saldo
         </span>
         <div className="text-[32px] font-bold text-text tracking-tight">
-          {isLoading ? "Memuat..." : formatCurrency(totalBalance)}
+          {isLoading ? "Memuat..." : (
+            <AnimatedBalance value={totalBalance} duration={700} />
+          )}
         </div>
         <div className="mt-2 text-[11px] text-text-secondary">
           Tercakup dari {wallets.length} dompet aktif
