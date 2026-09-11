@@ -2,8 +2,8 @@ import { z } from "zod";
 
 export const authSchema = z.object({
   email: z.string().email("Format email tidak valid").trim().toLowerCase(),
-  password: z.string().min(8, "Password minimal 8 karakter"),
-  name: z.string().min(1).max(50).optional(),
+  password: z.string().min(6, "Password minimal 6 karakter"),
+  name: z.string().max(50).optional().nullable().or(z.literal("")),
 });
 
 export const walletSchema = z.object({

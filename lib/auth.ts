@@ -12,8 +12,10 @@ export interface CurrentUser {
  */
 export async function ensureUserAndDefaults(userId: string, email: string, name?: string | null): Promise<void> {
   try {
-    const existingUser = await prisma.user.findUnique({
-      where: { id: userId },
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [{ id: userId }, { email }],
+      },
     });
 
     if (!existingUser) {
