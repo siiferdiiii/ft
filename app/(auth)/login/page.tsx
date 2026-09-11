@@ -36,6 +36,15 @@ export default function LoginPage() {
       });
 
       if (error) {
+        if (
+          error.status === 0 ||
+          error.message?.toLowerCase().includes("fetch failed")
+        ) {
+          // Supabase belum terkonfigurasi/offline, izinkan masuk mode demo/lokal
+          router.push("/dashboard");
+          router.refresh();
+          return;
+        }
         setErrorMessage("Email atau password tidak sesuai");
         setIsLoading(false);
         return;
