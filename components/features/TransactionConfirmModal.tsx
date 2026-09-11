@@ -112,7 +112,6 @@ export const TransactionConfirmModal: React.FC<TransactionConfirmModalProps> = (
   };
 
   const isVoice = initialData?.source === "VOICE";
-  const selectedWallet = wallets.find((w) => w.id === walletId) || wallets[0];
   const filteredCategories = categories.filter((c) => c.type === type);
 
   return (
@@ -127,158 +126,115 @@ export const TransactionConfirmModal: React.FC<TransactionConfirmModalProps> = (
           : "Catat Transaksi"
       }
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {errorMessage && (
-          <div className="p-3 bg-expense/10 text-expense text-[13px] font-medium rounded-control">
-            {errorMessage}
-          </div>
-        )}
-
-        {/* Teks suara asli / rawInput untuk verifikasi audit */}
-        {initialData?.rawInput && (
-          <div className="p-3 bg-field rounded-control border border-border">
-            <span className="text-[11px] font-medium text-text-secondary block mb-1">
-              Transkrip Suara:
-            </span>
-            <p className="text-[13px] text-text font-medium italic">
-              "{initialData.rawInput}"
-            </p>
-          </div>
-        )}
-
-        {/* Info ringkas dompet & tipe saat input via suara (tanpa form pemilih berlebih) */}
-        {isVoice && (
-          <div className="flex items-center justify-between px-3.5 py-2.5 bg-field rounded-control border border-border text-[12px]">
-            <div className="flex items-center gap-1.5">
-              <span className="text-text-secondary font-medium">Dompet:</span>
-              <span className="font-semibold text-text">
-                {selectedWallet?.name || "Dompet Aktif"}
-              </span>
+      <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 relative">
+        {/* Konten formulir yang dapat di-scroll secara bebas */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 pb-28">
+          {errorMessage && (
+            <div className="p-3 bg-expense/10 text-expense text-[13px] font-medium rounded-control">
+              {errorMessage}
             </div>
-            <span
-              className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                type === "INCOME"
-                  ? "bg-income/15 text-income"
-                  : "bg-expense/15 text-expense"
-              }`}
-            >
-              {type === "INCOME" ? "🟢 Pemasukan" : "🔴 Pengeluaran"}
-            </span>
-          </div>
-        )}
+          )}
 
-        {/* Segmented control: Pengeluaran vs Pemasukan - HANYA DITAMPILKAN JIKA BUKAN VOICE */}
-        {!isVoice && (
+          {/* Teks suara asli / rawInput untuk verifikasi audit */}
+          {initialData?.rawInput && (
+            <div className="p-3 bg-field rounded-control border border-border">
+              <span className="text-[11px] font-medium text-text-secondary block mb-1">
+                Transkrip Suara:
+              </span>
+              <p className="text-[13px] text-text font-medium italic">
+                "{initialData.rawInput}"
+              </p>
+            </div>
+          )}
+
+          {/* Segmented control: Pengeluaran vs Pemasukan - HANYA JIKA MANUAL */}
+          {!isVoice && (
+            <div>
+              <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
+                Arah Transaksi
+              </label>
+              <SegmentedControl value={type} onChange={setType} />
+            </div>
+          )}
+
+          {/* Nominal jumlah hero input */}
           <div>
             <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
-              Arah Transaksi
+              Jumlah (Rp)
             </label>
-            <SegmentedControl value={type} onChange={setType} />
+            <div className="relative">
+              <input
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0"
+                required
+                className={`w-full bg-field text-[22px] font-bold px-4 py-3 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none ${
+                  type === "INCOME" ? "text-income" : "text-text"
+                }`}
+              />
+            </div>
           </div>
-        )}
 
-        {/* Nominal jumlah hero input */}
-        <div>
-          <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
-            Jumlah (Rp)
-          </label>
-          <div className="relative">
+          {/* Pilihan Kategori */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-[12px] font-medium text-text-secondary">
+                Kategori {isVoice && (type === "INCOME" ? "(Pemasukan)" : "(Pengeluaran)")}
+              </label>
+              {isVoice && (
+                <span className="text-[11px] text-text-secondary">
+                  Otomatis disesuaikan
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto">
+              {filteredCategories.map((c) => (
+                <CategoryBudgetButton
+                  key={c.id}
+                  category={c}
+                  isSelected={categoryId === c.id}
+                  onSelect={(cat) => setCategoryId(cat.id)}
+                />
+              ))}
+              {filteredCategories.length === 0 && (
+                <span className="text-[12px] text-text-secondary py-1">
+                  Belum ada kategori untuk tipe ini
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Catatan / Merchant */}
+          <div>
+            <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
+              Catatan / Merchant
+            </label>
             <input
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="0"
-              required
-              className={`w-full bg-field text-[22px] font-bold px-4 py-3 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none ${
-                type === "INCOME" ? "text-income" : "text-text"
-              }`}
+              type="text"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Contoh: Kopi Kenangan, Makan Siang"
+              className="w-full bg-field text-text text-[14px] font-medium px-4 py-2.5 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none"
+            />
+          </div>
+
+          {/* Tanggal */}
+          <div>
+            <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
+              Tanggal Transaksi
+            </label>
+            <input
+              type="date"
+              value={transactionDate}
+              onChange={(e) => setTransactionDate(e.target.value)}
+              className="w-full bg-field text-text text-[14px] font-medium px-4 py-2.5 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none"
             />
           </div>
         </div>
 
-        {/* Pilihan Dompet - HANYA DITAMPILKAN JIKA BUKAN VOICE */}
-        {!isVoice && (
-          <div>
-            <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
-              Dompet
-            </label>
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {wallets.map((w) => (
-                <button
-                  key={w.id}
-                  type="button"
-                  onClick={() => setWalletId(w.id)}
-                  className={`px-3 py-2 rounded-control text-[13px] font-semibold whitespace-nowrap transition-all ${
-                    walletId === w.id
-                      ? "bg-primary text-white"
-                      : "bg-field text-text hover:bg-border/60"
-                  }`}
-                >
-                  {w.name}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Pilihan Kategori */}
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label className="block text-[12px] font-medium text-text-secondary">
-              Kategori {isVoice && (type === "INCOME" ? "(Pemasukan)" : "(Pengeluaran)")}
-            </label>
-            {isVoice && (
-              <span className="text-[11px] text-text-secondary">
-                Otomatis disesuaikan
-              </span>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto">
-            {filteredCategories.map((c) => (
-              <CategoryBudgetButton
-                key={c.id}
-                category={c}
-                isSelected={categoryId === c.id}
-                onSelect={(cat) => setCategoryId(cat.id)}
-              />
-            ))}
-            {filteredCategories.length === 0 && (
-              <span className="text-[12px] text-text-secondary py-1">
-                Belum ada kategori untuk tipe ini
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Catatan / Merchant */}
-        <div>
-          <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
-            Catatan / Merchant
-          </label>
-          <input
-            type="text"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Contoh: Kopi Kenangan, Makan Siang"
-            className="w-full bg-field text-text text-[14px] font-medium px-4 py-2.5 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none"
-          />
-        </div>
-
-        {/* Tanggal */}
-        <div>
-          <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
-            Tanggal Transaksi
-          </label>
-          <input
-            type="date"
-            value={transactionDate}
-            onChange={(e) => setTransactionDate(e.target.value)}
-            className="w-full bg-field text-text text-[14px] font-medium px-4 py-2.5 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none"
-          />
-        </div>
-
-        {/* Tombol Simpan CTA */}
-        <div className="pt-2">
+        {/* Tombol Konfirmasi Posisinya ABSOLUT di atas Navbar, Tidak Pernah Tenggelam */}
+        <div className="absolute bottom-0 left-0 right-0 p-4 bg-surface/95 backdrop-blur-md border-t border-border z-30 shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
           <Button type="submit" variant="primary" fullWidth isLoading={isLoading}>
             Simpan Transaksi
           </Button>

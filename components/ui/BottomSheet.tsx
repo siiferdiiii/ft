@@ -33,7 +33,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center">
+    <div className="fixed inset-0 z-[60] flex items-end justify-center">
       {/* Backdrop: #0D0D17 translusen */}
       <div
         className="fixed inset-0 bg-[#0D0D17]/60 backdrop-blur-sm transition-opacity"
@@ -41,15 +41,15 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
         aria-hidden="true"
       />
 
-      {/* Sheet Container: menutupi ~65-70% layar, radius atas 28px */}
-      <div className="relative z-10 w-full max-w-md max-h-[85vh] overflow-y-auto bg-surface rounded-t-sheet p-5 flex flex-col border-t border-border animate-in slide-in-from-bottom duration-200">
+      {/* Sheet Container: radius atas 28px, overflow-hidden agar footer absolut selalu di tempat */}
+      <div className="relative z-10 w-full max-w-md max-h-[85vh] h-auto bg-surface rounded-t-sheet flex flex-col border-t border-border animate-in slide-in-from-bottom duration-200 shadow-2xl overflow-hidden">
         {/* Grabber handle 40x4px */}
-        <div className="flex justify-center mb-3">
+        <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
           <div className="w-10 h-1 bg-border rounded-full" />
         </div>
 
         {/* Header modal */}
-        <div className="flex items-center justify-between pb-3 border-b border-border mb-4">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-border flex-shrink-0">
           <h2 className="text-[16px] font-bold text-text">{title}</h2>
           <button
             type="button"
@@ -61,8 +61,10 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
           </button>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto">{children}</div>
+        {/* Content Area */}
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
+          {children}
+        </div>
       </div>
     </div>
   );
