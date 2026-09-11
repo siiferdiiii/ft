@@ -111,6 +111,8 @@ export const TransactionConfirmModal: React.FC<TransactionConfirmModalProps> = (
     }
   };
 
+  const isVoice = initialData?.source === "VOICE";
+  const selectedWallet = wallets.find((w) => w.id === walletId) || wallets[0];
   const filteredCategories = categories.filter((c) => c.type === type);
 
   return (
@@ -118,7 +120,7 @@ export const TransactionConfirmModal: React.FC<TransactionConfirmModalProps> = (
       isOpen={isOpen}
       onClose={onClose}
       title={
-        initialData?.source === "VOICE"
+        isVoice
           ? "Konfirmasi Suara"
           : initialData?.source === "RECEIPT_SCAN"
           ? "Konfirmasi Resi"
@@ -144,13 +146,36 @@ export const TransactionConfirmModal: React.FC<TransactionConfirmModalProps> = (
           </div>
         )}
 
-        {/* Segmented control: Pengeluaran vs Pemasukan */}
-        <div>
-          <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
-            Arah Transaksi
-          </label>
-          <SegmentedControl value={type} onChange={setType} />
-        </div>
+        {/* Info ringkas dompet & tipe saat input via suara (tanpa form pemilih berlebih) */}
+        {isVoice && (
+          <div className="flex items-center justify-between px-3.5 py-2.5 bg-field rounded-control border border-border text-[12px]">
+            <div className="flex items-center gap-1.5">
+              <span className="text-text-secondary font-medium">Dompet:</span>
+              <span className="font-semibold text-text">
+                {selectedWallet?.name || "Dompet Aktif"}
+              </span>
+            </div>
+            <span
+              className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                type === "INCOME"
+                  ? "bg-income/15 text-income"
+                  : "bg-expense/15 text-expense"
+              }`}
+            >
+              {type === "INCOME" ? "🟢 Pemasukan" : "🔴 Pengeluaran"}
+            </span>
+          </div>
+        )}
+
+        {/* Segmented control: Pengeluaran vs Pemasukan - HANYA DITAMPILKAN JIKA BUKAN VOICE */}
+        {!isVoice && (
+          <div>
+            <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
+              Arah Transaksi
+            </label>
+            <SegmentedControl value={type} onChange={setType} />
+          </div>
+        )}
 
         {/* Nominal jumlah hero input */}
         <div>
@@ -164,40 +189,51 @@ export const TransactionConfirmModal: React.FC<TransactionConfirmModalProps> = (
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0"
               required
-              className="w-full bg-field text-text text-[22px] font-bold px-4 py-3 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none"
+              className={`w-full bg-field text-[22px] font-bold px-4 py-3 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none ${
+                type === "INCOME" ? "text-income" : "text-text"
+              }`}
             />
           </div>
         </div>
 
-        {/* Pilihan Dompet */}
-        <div>
-          <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
-            Dompet
-          </label>
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {wallets.map((w) => (
-              <button
-                key={w.id}
-                type="button"
-                onClick={() => setWalletId(w.id)}
-                className={`px-3 py-2 rounded-control text-[13px] font-semibold whitespace-nowrap transition-all ${
-                  walletId === w.id
-                    ? "bg-primary text-white"
-                    : "bg-field text-text hover:bg-border/60"
-                }`}
-              >
-                {w.name}
-              </button>
-            ))}
+        {/* Pilihan Dompet - HANYA DITAMPILKAN JIKA BUKAN VOICE */}
+        {!isVoice && (
+          <div>
+            <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
+              Dompet
+            </label>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {wallets.map((w) => (
+                <button
+                  key={w.id}
+                  type="button"
+                  onClick={() => setWalletId(w.id)}
+                  className={`px-3 py-2 rounded-control text-[13px] font-semibold whitespace-nowrap transition-all ${
+                    walletId === w.id
+                      ? "bg-primary text-white"
+                      : "bg-field text-text hover:bg-border/60"
+                  }`}
+                >
+                  {w.name}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Pilihan Kategori */}
         <div>
-          <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
-            Kategori
-          </label>
-          <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="block text-[12px] font-medium text-text-secondary">
+              Kategori {isVoice && (type === "INCOME" ? "(Pemasukan)" : "(Pengeluaran)")}
+            </label>
+            {isVoice && (
+              <span className="text-[11px] text-text-secondary">
+                Otomatis disesuaikan
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto">
             {filteredCategories.map((c) => (
               <CategoryBudgetButton
                 key={c.id}

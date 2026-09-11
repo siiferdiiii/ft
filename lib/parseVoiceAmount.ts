@@ -8,26 +8,73 @@ export interface ParsedVoiceResult {
   type: "INCOME" | "EXPENSE";
   note: string;
   rawInput: string;
+  categoryHint?: string;
 }
 
-// Kata kunci untuk menentukan arah uang
-const INCOME_KEYWORDS = [
-  "gaji",
-  "gajian",
-  "dapat",
-  "terima",
-  "pemasukan",
-  "masuk",
-  "transfer dari",
-  "diberi",
-  "bonus",
-  "thr",
-  "cashback",
-  "jual",
-  "penjualan",
-  "untung",
-  "dividen",
-];
+// Kamus kata kunci komprehensif untuk pemasukan (income)
+export const INCOME_DICTIONARY: Record<string, string[]> = {
+  gaji: [
+    "gaji",
+    "gajian",
+    "upah",
+    "honor",
+    "salary",
+    "payroll",
+    "lembur",
+    "uang lembur",
+  ],
+  bonus: [
+    "bonus",
+    "thr",
+    "hadiah",
+    "reward",
+    "insentif",
+    "tip",
+    "uang kaget",
+    "angpau",
+    "saweran",
+  ],
+  usaha: [
+    "penjualan",
+    "jual",
+    "jualan",
+    "untung",
+    "laba",
+    "omset",
+    "omzet",
+    "dagang",
+    "orderan",
+    "proyek",
+    "freelance",
+    "komisi",
+  ],
+  investasi: [
+    "dividen",
+    "bunga",
+    "cuan",
+    "crypto",
+    "saham",
+    "reksadana",
+    "imbal hasil",
+  ],
+  lainnya: [
+    "dapat",
+    "terima",
+    "masuk",
+    "transfer dari",
+    "transferan",
+    "diberi",
+    "dikasih",
+    "cashback",
+    "kembalian",
+    "uang jajan",
+    "pemasukan",
+    "pesangon",
+  ],
+};
+
+// Gabungan semua kata kunci pemasukan
+const ALL_INCOME_WORDS = Object.values(INCOME_DICTIONARY).flat();
 
 const WORD_TO_NUMBER: Record<string, number> = {
   nol: 0,
@@ -97,13 +144,19 @@ export function parseVoiceInput(transcript: string): ParsedVoiceResult {
   const rawInput = transcript.trim();
   const normalized = rawInput.toLowerCase();
 
-  // 1. Tentukan tipe transaksi (default EXPENSE kecuali ada indikasi pemasukan)
+  // 1. Tentukan tipe transaksi dan hint kategori dari kamus pemasukan
   let type: "INCOME" | "EXPENSE" = "EXPENSE";
-  for (const keyword of INCOME_KEYWORDS) {
-    if (new RegExp(`\\b${keyword}\\b`, "i").test(normalized)) {
-      type = "INCOME";
-      break;
+  let categoryHint: string | undefined = undefined;
+
+  for (const [catKey, keywords] of Object.entries(INCOME_DICTIONARY)) {
+    for (const keyword of keywords) {
+      if (new RegExp(`\\b${keyword}\\b`, "i").test(normalized)) {
+        type = "INCOME";
+        categoryHint = catKey;
+        break;
+      }
     }
+    if (type === "INCOME") break;
   }
 
   let extractedAmount: number | null = null;
@@ -179,5 +232,6 @@ export function parseVoiceInput(transcript: string): ParsedVoiceResult {
     type,
     note: cleanedNote,
     rawInput,
+    categoryHint,
   };
 }

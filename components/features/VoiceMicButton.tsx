@@ -135,6 +135,9 @@ export const VoiceMicButton: React.FC<VoiceMicButtonProps> = ({
       if (data.data?.categoryId) {
         suggestedCategoryId = data.data.categoryId;
       }
+      if (data.data?.type) {
+        parsed.type = data.data.type;
+      }
     } catch {
       // Abaikan jika suggestion gagal
     }
