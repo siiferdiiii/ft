@@ -129,10 +129,11 @@ function parseReceiptText(text: string) {
 
   // Prioritas 2: "Rp" + angka (bukan bagian dari item list, ambil yang paling besar)
   if (!amount) {
-    const rpMatches = text.matchAll(/rp\.?\s*([0-9][0-9.,]*)/gi);
+    const rpRegex = /rp\.?\s*([0-9][0-9.,]*)/gi;
     const amounts: number[] = [];
-    for (const m of rpMatches) {
-      const clean = m[1].replace(/[^\d]/g, "");
+    let rpMatch;
+    while ((rpMatch = rpRegex.exec(text)) !== null) {
+      const clean = rpMatch[1].replace(/[^\d]/g, "");
       const val = parseInt(clean, 10);
       if (val >= 500 && val < 100000000) {
         amounts.push(val);
