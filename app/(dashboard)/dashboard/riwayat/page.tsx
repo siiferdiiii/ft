@@ -5,10 +5,11 @@ import { useAppData } from "@/lib/context/AppDataContext";
 import { TransactionDto } from "@/lib/types";
 import { formatCurrency } from "@/lib/currency";
 import { BottomNav } from "@/components/ui/BottomNav";
+import { SwipeDeleteRow } from "@/components/ui/SwipeDeleteRow";
 import Link from "next/link";
 
 export default function RiwayatPage() {
-  const { wallets, categories } = useAppData();
+  const { wallets, categories, refreshData } = useAppData();
 
   // State filter
   const [search, setSearch] = useState("");
@@ -20,6 +21,7 @@ export default function RiwayatPage() {
 
   // Data state
   const [transactions, setTransactions] = useState<TransactionDto[]>([]);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
 
@@ -48,6 +50,23 @@ export default function RiwayatPage() {
       setIsLoading(false);
     }
   }, [search, filterWalletId, filterCategoryId, filterType, dateFrom, dateTo]);
+
+  const handleDeleteTransaction = useCallback(async (txId: string) => {
+    setDeletingId(txId);
+    try {
+      const res = await fetch(`/api/transactions/${txId}`, { method: "DELETE" });
+      if (res.ok) {
+        // Hapus dari UI secara optimistic
+        setTransactions((prev) => prev.filter((t) => t.id !== txId));
+        // Refresh data context agar saldo dompet juga ter-update
+        refreshData(true);
+      }
+    } catch (err) {
+      console.warn("Gagal menghapus transaksi:", err);
+    } finally {
+      setDeletingId(null);
+    }
+  }, [refreshData]);
 
   // Debounce search, fetch langsung untuk filter lain
   useEffect(() => {
@@ -247,41 +266,44 @@ export default function RiwayatPage() {
             </div>
             <div className="bg-surface rounded-card-lg border border-border divide-y divide-border overflow-hidden">
               {txs.map((tx) => (
-                <div
+                <SwipeDeleteRow
                   key={tx.id}
-                  className="flex items-center justify-between p-3.5 hover:bg-field/50 transition-colors"
+                  onDelete={() => handleDeleteTransaction(tx.id)}
+                  isDeleting={deletingId === tx.id}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
-                      tx.type === "INCOME" ? "bg-income/15 text-income" : "bg-expense/15 text-expense"
-                    }`}>
-                      {tx.categoryName ? tx.categoryName.charAt(0) : "•"}
-                    </div>
-                    <div>
-                      <div className="text-[13px] font-semibold text-text truncate max-w-[180px]">
-                        {tx.note || tx.categoryName || "Transaksi"}
+                  <div className="flex items-center justify-between p-3.5">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
+                        tx.type === "INCOME" ? "bg-income/15 text-income" : "bg-expense/15 text-expense"
+                      }`}>
+                        {tx.categoryName ? tx.categoryName.charAt(0) : "•"}
                       </div>
-                      <div className="text-[11px] text-text-secondary flex items-center gap-1.5">
-                        <span>{tx.walletName || "Dompet"}</span>
-                        {tx.categoryName && (
-                          <>
-                            <span>•</span>
-                            <span>{tx.categoryName}</span>
-                          </>
-                        )}
+                      <div>
+                        <div className="text-[13px] font-semibold text-text truncate max-w-[180px]">
+                          {tx.note || tx.categoryName || "Transaksi"}
+                        </div>
+                        <div className="text-[11px] text-text-secondary flex items-center gap-1.5">
+                          <span>{tx.walletName || "Dompet"}</span>
+                          {tx.categoryName && (
+                            <>
+                              <span>•</span>
+                              <span>{tx.categoryName}</span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div
-                    className={`text-[14px] font-bold whitespace-nowrap ${
-                      tx.type === "INCOME" ? "text-income" : "text-expense"
-                    }`}
-                  >
-                    {tx.type === "INCOME" ? "+" : "-"}
-                    {formatCurrency(tx.amount)}
+                    <div
+                      className={`text-[14px] font-bold whitespace-nowrap ${
+                        tx.type === "INCOME" ? "text-income" : "text-expense"
+                      }`}
+                    >
+                      {tx.type === "INCOME" ? "+" : "-"}
+                      {formatCurrency(tx.amount)}
+                    </div>
                   </div>
-                </div>
+                </SwipeDeleteRow>
               ))}
             </div>
           </div>
