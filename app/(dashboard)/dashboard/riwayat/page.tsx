@@ -19,19 +19,29 @@ export default function RiwayatPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
+  const PAGE_SIZE = 30;
+
   // Data state
   const [transactions, setTransactions] = useState<TransactionDto[]>([]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetchTransactions = useCallback(async () => {
-    setIsLoading(true);
+  const fetchTransactions = useCallback(async (append = false) => {
+    if (append) {
+      setIsLoadingMore(true);
+    } else {
+      setIsLoading(true);
+    }
     try {
       const params = new URLSearchParams();
-      params.set("limit", "100");
+      const offset = append ? transactions.length : 0;
+      params.set("limit", String(PAGE_SIZE));
+      params.set("offset", String(offset));
       if (search) params.set("search", search);
       if (filterWalletId) params.set("walletId", filterWalletId);
       if (filterCategoryId) params.set("categoryId", filterCategoryId);
@@ -42,14 +52,20 @@ export default function RiwayatPage() {
       const res = await fetch(`/api/transactions?${params.toString()}`);
       const json = await res.json();
       if (json.data) {
-        setTransactions(json.data);
+        if (append) {
+          setTransactions((prev) => [...prev, ...json.data]);
+        } else {
+          setTransactions(json.data);
+        }
+        setHasMore(json.data.length >= PAGE_SIZE);
       }
     } catch (err) {
       console.warn("Gagal memuat transaksi:", err);
     } finally {
       setIsLoading(false);
+      setIsLoadingMore(false);
     }
-  }, [search, filterWalletId, filterCategoryId, filterType, dateFrom, dateTo]);
+  }, [search, filterWalletId, filterCategoryId, filterType, dateFrom, dateTo, transactions.length]);
 
   const handleDeleteTransaction = useCallback(async (txId: string) => {
     setDeletingId(txId);
@@ -72,7 +88,7 @@ export default function RiwayatPage() {
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      fetchTransactions();
+      fetchTransactions(false);
     }, 300);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -325,6 +341,24 @@ export default function RiwayatPage() {
                 : "Belum ada transaksi yang tercatat."}
             </p>
           </div>
+        )}
+
+        {/* Load More Button */}
+        {!isLoading && hasMore && transactions.length > 0 && (
+          <button
+            onClick={() => fetchTransactions(true)}
+            disabled={isLoadingMore}
+            className="w-full py-3 bg-surface rounded-card border border-border text-[13px] font-semibold text-primary hover:bg-field/50 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+          >
+            {isLoadingMore ? (
+              <>
+                <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                <span>Memuat...</span>
+              </>
+            ) : (
+              <span>Muat 30 Transaksi Lagi</span>
+            )}
+          </button>
         )}
 
         {/* Loading Skeleton */}

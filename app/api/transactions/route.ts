@@ -63,6 +63,7 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const limit = parseInt(searchParams.get("limit") || "50", 10);
+    const offset = parseInt(searchParams.get("offset") || "0", 10);
     const walletId = searchParams.get("walletId");
     const categoryId = searchParams.get("categoryId");
     const type = searchParams.get("type");
@@ -106,6 +107,7 @@ export async function GET(req: NextRequest) {
       },
       orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }],
       take: Math.min(limit, 200),
+      skip: offset,
     });
 
     const result: TransactionDto[] = transactions.map((t) => ({
