@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState } from "react";
 import { WalletCard } from "@/components/features/WalletCard";
 import { VoiceMicButton } from "@/components/features/VoiceMicButton";
 import {
@@ -10,61 +10,28 @@ import {
 import { ReceiptScannerModal } from "@/components/features/ReceiptScannerModal";
 import { BottomNav } from "@/components/ui/BottomNav";
 import { CameraIcon, PlusIcon } from "@/components/ui/Icons";
-import { WalletDto, CategoryDto, TransactionDto, TransactionType, InputSource } from "@/lib/types";
+import { TransactionType, InputSource } from "@/lib/types";
 import { formatCurrency } from "@/lib/currency";
 import { ParsedVoiceResult } from "@/lib/parseVoiceAmount";
+import { useAppData } from "@/lib/context/AppDataContext";
 
 export default function DashboardPage() {
-  const [wallets, setWallets] = useState<WalletDto[]>([]);
-  const [activeWalletId, setActiveWalletId] = useState<string>("");
-  const [categories, setCategories] = useState<CategoryDto[]>([]);
-  const [recentTransactions, setRecentTransactions] = useState<TransactionDto[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const {
+    wallets,
+    categories,
+    recentTransactions,
+    activeWalletId,
+    setActiveWalletId,
+    isInitialLoading: isLoading,
+    addTransactionOptimistic,
+    refreshData,
+  } = useAppData();
 
   // Modals state
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [preFillData, setPreFillData] = useState<PreFillTransactionData | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
-
-  const loadData = useCallback(async () => {
-    try {
-      const [walletsRes, categoriesRes, txRes] = await Promise.all([
-        fetch("/api/wallets"),
-        fetch("/api/categories"),
-        fetch("/api/transactions?limit=10"),
-      ]);
-
-      const [walletsJson, categoriesJson, txJson] = await Promise.all([
-        walletsRes.json(),
-        categoriesRes.json(),
-        txRes.json(),
-      ]);
-
-      if (walletsJson.data) {
-        setWallets(walletsJson.data);
-        if (!activeWalletId && walletsJson.data.length > 0) {
-          setActiveWalletId(walletsJson.data[0].id);
-        }
-      }
-
-      if (categoriesJson.data) {
-        setCategories(categoriesJson.data);
-      }
-
-      if (txJson.data) {
-        setRecentTransactions(txJson.data);
-      }
-    } catch (err) {
-      console.error("Gagal memuat data dashboard:", err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [activeWalletId]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
 
   // Total kumulasi saldo seluruh dompet
   const totalBalance = wallets.reduce((sum, w) => sum + w.balance, 0);
@@ -117,65 +84,9 @@ export default function DashboardPage() {
     receiptImageUrl: string | null;
     transactionDate: string;
   }) => {
-    // 1. Snapshot state sebelumnya untuk rollback jika server gagal
-    const prevWallets = [...wallets];
-    const prevTransactions = [...recentTransactions];
-
-    const targetWallet = wallets.find((w) => w.id === txData.walletId) || wallets[0];
-    const targetCategory = categories.find((c) => c.id === txData.categoryId);
-
-    // 2. Pembaruan Saldo Instan di Layar (0ms!)
-    const balanceDiff = txData.type === "INCOME" ? txData.amount : -txData.amount;
-    setWallets((prev) =>
-      prev.map((w) =>
-        w.id === txData.walletId ? { ...w, balance: w.balance + balanceDiff } : w
-      )
-    );
-
-    // 3. Tambahkan Transaksi Baru ke Daftar Paling Atas Secara Instan (0ms!)
-    const tempId = "optimistic-" + Date.now();
-    const optimisticTx: TransactionDto = {
-      id: tempId,
-      walletId: txData.walletId,
-      walletName: targetWallet?.name,
-      categoryId: txData.categoryId,
-      categoryName: targetCategory?.name || null,
-      type: txData.type,
-      amount: txData.amount,
-      note: txData.note,
-      source: txData.source,
-      rawInput: txData.rawInput,
-      receiptImageUrl: txData.receiptImageUrl,
-      transactionDate: txData.transactionDate,
-      createdAt: new Date().toISOString(),
-    };
-    setRecentTransactions((prev) => [optimisticTx, ...prev]);
-
-    // 4. Catat ke Database di Latar Belakang (Background Sync)
-    try {
-      const res = await fetch("/api/transactions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(txData),
-      });
-
-      const json = await res.json();
-      if (!res.ok || json.error) {
-        throw new Error(json.error?.message || "Gagal mencatat transaksi");
-      }
-
-      // Perbarui ID sementara dengan ID resmi dari database
-      if (json.data?.id) {
-        setRecentTransactions((prev) =>
-          prev.map((t) => (t.id === tempId ? { ...t, id: json.data.id } : t))
-        );
-      }
-    } catch (err) {
-      console.error("Gagal sinkronisasi transaksi:", err);
-      // Rollback ke state sebelumnya jika terjadi error jaringan
-      setWallets(prevWallets);
-      setRecentTransactions(prevTransactions);
-      handleNotification("Gagal menyimpan transaksi ke database. Saldo dikembalikan.");
+    const result = await addTransactionOptimistic(txData);
+    if (!result.success && result.error) {
+      handleNotification(result.error);
     }
   };
 
@@ -264,7 +175,7 @@ export default function DashboardPage() {
           className="flex items-center gap-2 px-5 py-2.5 bg-field text-text rounded-control text-[14px] font-semibold hover:bg-border/70 active:scale-95 transition-all"
         >
           <PlusIcon className="w-4 h-4 text-primary" />
-          <span>+ Catat</span>
+          <span>Catat</span>
         </button>
 
         <button
@@ -313,9 +224,8 @@ export default function DashboardPage() {
 
               {/* Nominal di kanan warna income/expense */}
               <div
-                className={`text-[14px] font-bold ${
-                  tx.type === "INCOME" ? "text-income" : "text-expense"
-                }`}
+                className={`text-[14px] font-bold ${tx.type === "INCOME" ? "text-income" : "text-expense"
+                  }`}
               >
                 {tx.type === "INCOME" ? "+" : "-"}
                 {formatCurrency(tx.amount)}
@@ -336,7 +246,7 @@ export default function DashboardPage() {
         isOpen={isConfirmModalOpen}
         onClose={() => setIsConfirmModalOpen(false)}
         onSave={handleSaveTransaction}
-        onSuccess={loadData}
+        onSuccess={() => refreshData(true)}
         wallets={wallets}
         categories={categories}
         initialData={preFillData}

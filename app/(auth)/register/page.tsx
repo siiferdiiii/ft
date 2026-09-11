@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { PWAInstallButton } from "@/components/features/PWAInstallButton";
 import { createClient } from "@/lib/supabase/client";
 
 export default function RegisterPage() {
@@ -146,6 +147,11 @@ export default function RegisterPage() {
             Masuk
           </Link>
         </div>
+      </div>
+
+      {/* Tombol Install Aplikasi PWA (Sesuai Permintaan User) */}
+      <div className="mt-6">
+        <PWAInstallButton />
       </div>
     </div>
   );

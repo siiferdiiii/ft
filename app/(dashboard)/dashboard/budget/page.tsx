@@ -6,11 +6,18 @@ import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { EditIcon } from "@/components/ui/Icons";
 import { CategoryDto } from "@/lib/types";
-import { formatCurrency } from "@/lib/currency";
+import { formatCurrency, formatCurrencyInput, parseCurrencyInput } from "@/lib/currency";
+import { useAppData } from "@/lib/context/AppDataContext";
 
 export default function BudgetPage() {
-  const [categories, setCategories] = useState<CategoryDto[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const {
+    categories: allCategories,
+    isInitialLoading: isLoading,
+    refreshData,
+    mutateCategories,
+  } = useAppData();
+
+  const categories = allCategories.filter((c) => c.type === "EXPENSE");
 
   // Edit budget modal state
   const [selectedCategory, setSelectedCategory] = useState<CategoryDto | null>(null);
@@ -18,31 +25,9 @@ export default function BudgetPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const loadCategories = async () => {
-    try {
-      const res = await fetch("/api/categories");
-      const json = await res.json();
-      if (json.data) {
-        // Hanya kategori pengeluaran yang memiliki budget
-        const expenseCategories = json.data.filter(
-          (c: CategoryDto) => c.type === "EXPENSE"
-        );
-        setCategories(expenseCategories);
-      }
-    } catch (err) {
-      console.error("Gagal memuat kategori budget:", err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadCategories();
-  }, []);
-
   const handleOpenEdit = (category: CategoryDto) => {
     setSelectedCategory(category);
-    setBudgetLimitInput(category.budgetLimit ? String(category.budgetLimit) : "");
+    setBudgetLimitInput(category.budgetLimit ? formatCurrencyInput(category.budgetLimit) : "");
     setErrorMessage(null);
   };
 
@@ -51,14 +36,15 @@ export default function BudgetPage() {
     if (!selectedCategory) return;
 
     setErrorMessage(null);
-    const numericLimit = budgetLimitInput.trim()
-      ? parseFloat(budgetLimitInput.replace(/[^0-9.]/g, ""))
-      : null;
+    const parsed = parseCurrencyInput(budgetLimitInput);
+    const numericLimit = budgetLimitInput.trim() ? (parsed > 0 ? parsed : null) : null;
 
-    if (numericLimit !== null && (isNaN(numericLimit) || numericLimit <= 0)) {
-      setErrorMessage("Batas budget harus lebih dari 0");
-      return;
-    }
+    // Mutasi instan di memori (0ms!)
+    mutateCategories((prev) =>
+      prev.map((c) =>
+        c.id === selectedCategory.id ? { ...c, budgetLimit: numericLimit } : c
+      )
+    );
 
     setIsSaving(true);
     try {
@@ -73,13 +59,15 @@ export default function BudgetPage() {
       const json = await res.json();
       if (!res.ok || json.error) {
         setErrorMessage(json.error?.message || "Gagal memperbarui budget");
+        refreshData(true);
         return;
       }
 
-      await loadCategories();
+      refreshData(true);
       setSelectedCategory(null);
     } catch {
       setErrorMessage("Terjadi gangguan jaringan saat menyimpan budget");
+      refreshData(true);
     } finally {
       setIsSaving(false);
     }
@@ -228,30 +216,33 @@ export default function BudgetPage() {
         onClose={() => setSelectedCategory(null)}
         title={`Atur Budget: ${selectedCategory?.name}`}
       >
-        <form onSubmit={handleSaveBudget} className="space-y-4">
-          {errorMessage && (
-            <div className="p-3 bg-expense/10 text-expense text-[13px] font-medium rounded-control">
-              {errorMessage}
-            </div>
-          )}
+        <form onSubmit={handleSaveBudget} className="flex flex-col flex-1 min-h-0 relative">
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 pb-28">
+            {errorMessage && (
+              <div className="p-3 bg-expense/10 text-expense text-[13px] font-medium rounded-control">
+                {errorMessage}
+              </div>
+            )}
 
-          <div>
-            <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
-              Batas Budget Bulanan (Rp)
-            </label>
-            <input
-              type="number"
-              value={budgetLimitInput}
-              onChange={(e) => setBudgetLimitInput(e.target.value)}
-              placeholder="Kosongkan untuk tanpa batas"
-              className="w-full bg-field text-text text-[20px] font-bold px-4 py-3 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none"
-            />
-            <span className="text-[11px] text-text-secondary mt-1 block">
-              Kosongkan field ini jika kategori tidak memiliki batas budget.
-            </span>
+            <div>
+              <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
+                Batas Budget Bulanan (Rp)
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={budgetLimitInput}
+                onChange={(e) => setBudgetLimitInput(formatCurrencyInput(e.target.value))}
+                placeholder="Rp 0 (Kosongkan untuk tanpa batas)"
+                className="w-full bg-field text-text text-[20px] font-bold px-4 py-3 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none"
+              />
+              <span className="text-[11px] text-text-secondary mt-1 block">
+                Kosongkan field ini jika kategori tidak memiliki batas budget.
+              </span>
+            </div>
           </div>
 
-          <div className="pt-2">
+          <div className="absolute bottom-0 left-0 right-0 p-4 bg-surface/95 backdrop-blur-md border-t border-border z-30 shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
             <Button type="submit" variant="primary" fullWidth isLoading={isSaving}>
               Simpan Perubahan
             </Button>

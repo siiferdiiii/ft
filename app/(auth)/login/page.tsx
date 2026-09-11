@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { PWAInstallButton } from "@/components/features/PWAInstallButton";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
@@ -125,6 +126,10 @@ export default function LoginPage() {
             Daftar Sekarang
           </Link>
         </div>
+      </div>
+
+      <div className="mt-6">
+        <PWAInstallButton />
       </div>
     </div>
   );

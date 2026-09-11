@@ -7,11 +7,16 @@ import { Button } from "@/components/ui/Button";
 import { TransferModal } from "@/components/features/TransferModal";
 import { PlusIcon, TransferIcon, TrashIcon, EditIcon, WalletIcon } from "@/components/ui/Icons";
 import { WalletDto, WalletType } from "@/lib/types";
-import { formatCurrency } from "@/lib/currency";
+import { formatCurrency, formatCurrencyInput, parseCurrencyInput } from "@/lib/currency";
+import { useAppData } from "@/lib/context/AppDataContext";
 
 export default function WalletsPage() {
-  const [wallets, setWallets] = useState<WalletDto[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const {
+    wallets,
+    isInitialLoading: isLoading,
+    refreshData,
+    mutateWallets,
+  } = useAppData();
 
   // Modals state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -25,23 +30,7 @@ export default function WalletsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const loadWallets = async () => {
-    try {
-      const res = await fetch("/api/wallets");
-      const json = await res.json();
-      if (json.data) {
-        setWallets(json.data);
-      }
-    } catch (err) {
-      console.error("Gagal memuat dompet:", err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadWallets();
-  }, []);
+  const loadWallets = () => refreshData(true);
 
   const handleOpenCreate = () => {
     setEditingWallet(null);
@@ -84,9 +73,11 @@ export default function WalletsPage() {
           setErrorMessage(json.error?.message || "Gagal memperbarui dompet");
           return;
         }
+        mutateWallets((prev) =>
+          prev.map((w) => (w.id === editingWallet.id ? { ...w, name: name.trim(), type } : w))
+        );
       } else {
-        // Buat dompet baru
-        const bal = parseFloat(initialBalance.replace(/[^0-9.]/g, "")) || 0;
+        const bal = parseCurrencyInput(initialBalance);
         const res = await fetch("/api/wallets", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -101,9 +92,12 @@ export default function WalletsPage() {
           setErrorMessage(json.error?.message || "Gagal membuat dompet");
           return;
         }
+        if (json.data) {
+          mutateWallets((prev) => [...prev, json.data]);
+        }
       }
 
-      await loadWallets();
+      refreshData(true);
       setIsCreateModalOpen(false);
     } catch {
       setErrorMessage("Terjadi kesalahan koneksi saat menyimpan dompet");
@@ -115,6 +109,7 @@ export default function WalletsPage() {
   const handleDeleteWallet = async (walletId: string) => {
     if (!confirm("Arsipkan atau hapus dompet ini?")) return;
 
+    mutateWallets((prev) => prev.filter((w) => w.id !== walletId));
     try {
       const res = await fetch(`/api/wallets/${walletId}`, {
         method: "DELETE",
@@ -122,11 +117,13 @@ export default function WalletsPage() {
       const json = await res.json();
       if (!res.ok || json.error) {
         alert(json.error?.message || "Gagal menghapus dompet");
+        refreshData(true);
         return;
       }
-      await loadWallets();
+      refreshData(true);
     } catch {
       alert("Terjadi kesalahan jaringan");
+      refreshData(true);
     }
   };
 
@@ -220,59 +217,62 @@ export default function WalletsPage() {
         onClose={() => setIsCreateModalOpen(false)}
         title={editingWallet ? "Edit Dompet" : "Tambah Dompet Baru"}
       >
-        <form onSubmit={handleSaveWallet} className="space-y-4">
-          {errorMessage && (
-            <div className="p-3 bg-expense/10 text-expense text-[13px] font-medium rounded-control">
-              {errorMessage}
-            </div>
-          )}
+        <form onSubmit={handleSaveWallet} className="flex flex-col flex-1 min-h-0 relative">
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 pb-28">
+            {errorMessage && (
+              <div className="p-3 bg-expense/10 text-expense text-[13px] font-medium rounded-control">
+                {errorMessage}
+              </div>
+            )}
 
-          <div>
-            <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
-              Nama Dompet
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Contoh: Cash Harian, BCA, GoPay"
-              required
-              className="w-full bg-field text-text text-[14px] font-medium px-4 py-3 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
-              Tipe Dompet
-            </label>
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value as WalletType)}
-              className="w-full bg-field text-text text-[14px] font-medium px-4 py-3 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none"
-            >
-              <option value="CASH">Tunai (Cash)</option>
-              <option value="EWALLET">E-Wallet (GoPay, OVO, ShopeePay)</option>
-              <option value="BANK">Rekening Bank</option>
-              <option value="OTHER">Lainnya</option>
-            </select>
-          </div>
-
-          {!editingWallet && (
             <div>
               <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
-                Saldo Awal (Rp)
+                Nama Dompet
               </label>
               <input
-                type="number"
-                value={initialBalance}
-                onChange={(e) => setInitialBalance(e.target.value)}
-                placeholder="0"
-                className="w-full bg-field text-text text-[20px] font-bold px-4 py-3 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none"
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Contoh: Cash Harian, BCA, GoPay"
+                required
+                className="w-full bg-field text-text text-[14px] font-medium px-4 py-3 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none"
               />
             </div>
-          )}
 
-          <div className="pt-2">
+            <div>
+              <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
+                Tipe Dompet
+              </label>
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value as WalletType)}
+                className="w-full bg-field text-text text-[14px] font-medium px-4 py-3 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none"
+              >
+                <option value="CASH">Tunai (Cash)</option>
+                <option value="EWALLET">E-Wallet (GoPay, OVO, ShopeePay)</option>
+                <option value="BANK">Rekening Bank</option>
+                <option value="OTHER">Lainnya</option>
+              </select>
+            </div>
+
+            {!editingWallet && (
+              <div>
+                <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
+                  Saldo Awal (Rp)
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={initialBalance}
+                  onChange={(e) => setInitialBalance(formatCurrencyInput(e.target.value))}
+                  placeholder="Rp 0"
+                  className="w-full bg-field text-text text-[20px] font-bold px-4 py-3 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none"
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="absolute bottom-0 left-0 right-0 p-4 bg-surface/95 backdrop-blur-md border-t border-border z-30 shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
             <Button type="submit" variant="primary" fullWidth isLoading={isSaving}>
               {editingWallet ? "Simpan Perubahan" : "Buat Dompet"}
             </Button>

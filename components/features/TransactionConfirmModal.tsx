@@ -6,6 +6,7 @@ import { Button } from "../ui/Button";
 import { SegmentedControl } from "../ui/SegmentedControl";
 import { CategoryBudgetButton } from "./CategoryBudgetButton";
 import { WalletDto, CategoryDto, TransactionType, InputSource } from "@/lib/types";
+import { formatCurrencyInput, parseCurrencyInput } from "@/lib/currency";
 
 export interface PreFillTransactionData {
   type: TransactionType;
@@ -64,7 +65,7 @@ export const TransactionConfirmModal: React.FC<TransactionConfirmModalProps> = (
       setType(initialData.type || "EXPENSE");
       setWalletId(initialData.walletId || (wallets[0]?.id ?? ""));
       setCategoryId(initialData.categoryId || null);
-      setAmount(initialData.amount ? String(initialData.amount) : "");
+      setAmount(initialData.amount ? formatCurrencyInput(initialData.amount) : "");
       setNote(initialData.note || "");
       if (initialData.transactionDate) {
         setTransactionDate(initialData.transactionDate.slice(0, 10));
@@ -79,8 +80,8 @@ export const TransactionConfirmModal: React.FC<TransactionConfirmModalProps> = (
     e.preventDefault();
     setErrorMessage(null);
 
-    const numericAmount = parseFloat(amount.replace(/[^0-9.]/g, ""));
-    if (isNaN(numericAmount) || numericAmount <= 0) {
+    const numericAmount = parseCurrencyInput(amount);
+    if (numericAmount <= 0) {
       setErrorMessage("Nominal transaksi harus lebih dari 0");
       return;
     }
@@ -186,10 +187,11 @@ export const TransactionConfirmModal: React.FC<TransactionConfirmModalProps> = (
             </label>
             <div className="relative">
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="0"
+                onChange={(e) => setAmount(formatCurrencyInput(e.target.value))}
+                placeholder="Rp 0"
                 required
                 className={`w-full bg-field text-[22px] font-bold px-4 py-3 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none ${
                   type === "INCOME" ? "text-income" : "text-text"

@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5E5CE6"/>
+      <stop offset="100%" stop-color="#3b37c4"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34C759"/>
+      <stop offset="100%" stop-color="#30D158"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#000000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Background Squircle -->
+  <rect width="512" height="512" rx="128" fill="url(#bgGrad)"/>
+
+  <!-- Subtle Inner Border -->
+  <rect x="8" y="8" width="496" height="496" rx="120" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="4"/>
+
+  <!-- Icon Graphics: Modern Wallet & Rising Growth Trend -->
+  <g filter="url(#shadow)">
+    <!-- Wallet Backing -->
+    <rect x="116" y="156" width="280" height="200" rx="32" fill="#FFFFFF" fill-opacity="0.95"/>
+    
+    <!-- Wallet Flap Pocket -->
+    <path d="M 116 216 L 364 216 C 382 216 396 230 396 248 L 396 264 C 396 282 382 296 364 296 L 116 296 Z" fill="#F2F2F7"/>
+    
+    <!-- Wallet Card Clasp Badge -->
+    <rect x="320" y="236" width="64" height="40" rx="12" fill="#5E5CE6"/>
+    <circle cx="342" cy="256" r="6" fill="#FFFFFF"/>
+
+    <!-- Upward Trend Arrow Accent (Income / Growth) -->
+    <path d="M 170 300 L 230 240 L 270 270 L 330 200" fill="none" stroke="url(#accentGrad)" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M 300 200 L 330 200 L 330 230" fill="none" stroke="url(#accentGrad)" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- Voice Soundwave Micro Badge -->
+    <g transform="translate(160, 180)">
+      <line x1="0" y1="4" x2="0" y2="16" stroke="#5E5CE6" stroke-width="6" stroke-linecap="round"/>
+      <line x1="14" y1="0" x2="14" y2="20" stroke="#5E5CE6" stroke-width="6" stroke-linecap="round"/>
+      <line x1="28" y1="6" x2="28" y2="14" stroke="#5E5CE6" stroke-width="6" stroke-linecap="round"/>
+    </g>
+  </g>
+</svg>

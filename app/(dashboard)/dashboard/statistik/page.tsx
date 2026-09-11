@@ -18,8 +18,24 @@ export default function StatisticsPage() {
   const touchStartY = useRef<number | null>(null);
 
   useEffect(() => {
+    const cacheKey = `ft_stats_${period}_${monthOffset}`;
+
+    // 1. Render instan dari cache lokal (0ms Delay)
+    if (typeof window !== "undefined") {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          setStats(parsed);
+          setIsLoading(false);
+        } catch {
+          // Abaikan
+        }
+      }
+    }
+
+    // 2. Sinkronisasi latar belakang
     const fetchStats = async () => {
-      setIsLoading(true);
       try {
         const res = await fetch(
           `/api/statistics?period=${period}&monthOffset=${monthOffset}`
@@ -27,6 +43,13 @@ export default function StatisticsPage() {
         const json = await res.json();
         if (json.data) {
           setStats(json.data);
+          if (typeof window !== "undefined") {
+            try {
+              localStorage.setItem(cacheKey, JSON.stringify(json.data));
+            } catch {
+              // Storage quota
+            }
+          }
         }
       } catch (err) {
         console.error("Gagal memuat statistik:", err);

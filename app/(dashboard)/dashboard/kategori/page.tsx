@@ -7,12 +7,18 @@ import { Button } from "@/components/ui/Button";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { PlusIcon, TrashIcon, EditIcon } from "@/components/ui/Icons";
 import { CategoryDto, TransactionType } from "@/lib/types";
-import { formatCurrency } from "@/lib/currency";
+import { formatCurrency, formatCurrencyInput, parseCurrencyInput } from "@/lib/currency";
+import { useAppData } from "@/lib/context/AppDataContext";
 
 export default function CategoriesPage() {
-  const [categories, setCategories] = useState<CategoryDto[]>([]);
+  const {
+    categories,
+    isInitialLoading: isLoading,
+    refreshData,
+    mutateCategories,
+  } = useAppData();
+
   const [activeTab, setActiveTab] = useState<TransactionType>("EXPENSE");
-  const [isLoading, setIsLoading] = useState(true);
 
   // Form modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -23,23 +29,7 @@ export default function CategoriesPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const loadCategories = async () => {
-    try {
-      const res = await fetch("/api/categories");
-      const json = await res.json();
-      if (json.data) {
-        setCategories(json.data);
-      }
-    } catch (err) {
-      console.error("Gagal memuat kategori:", err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadCategories();
-  }, []);
+  const loadCategories = () => refreshData(true);
 
   const handleOpenCreate = () => {
     setEditingCategory(null);
@@ -54,7 +44,7 @@ export default function CategoriesPage() {
     setEditingCategory(c);
     setName(c.name);
     setType(c.type);
-    setBudgetLimit(c.budgetLimit ? String(c.budgetLimit) : "");
+    setBudgetLimit(c.budgetLimit ? formatCurrencyInput(c.budgetLimit) : "");
     setErrorMessage(null);
     setIsModalOpen(true);
   };
@@ -68,13 +58,19 @@ export default function CategoriesPage() {
       return;
     }
 
-    const numericLimit = budgetLimit.trim()
-      ? parseFloat(budgetLimit.replace(/[^0-9.]/g, ""))
-      : null;
+    const parsedLimit = parseCurrencyInput(budgetLimit);
+    const numericLimit = budgetLimit.trim() ? (parsedLimit > 0 ? parsedLimit : null) : null;
 
     setIsSaving(true);
     try {
       if (editingCategory) {
+        mutateCategories((prev) =>
+          prev.map((c) =>
+            c.id === editingCategory.id
+              ? { ...c, name: name.trim(), budgetLimit: numericLimit }
+              : c
+          )
+        );
         const res = await fetch(`/api/categories/${editingCategory.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -86,6 +82,7 @@ export default function CategoriesPage() {
         const json = await res.json();
         if (!res.ok || json.error) {
           setErrorMessage(json.error?.message || "Gagal memperbarui kategori");
+          refreshData(true);
           return;
         }
       } else {
@@ -103,12 +100,16 @@ export default function CategoriesPage() {
           setErrorMessage(json.error?.message || "Gagal menambahkan kategori");
           return;
         }
+        if (json.data) {
+          mutateCategories((prev) => [...prev, json.data]);
+        }
       }
 
-      await loadCategories();
+      refreshData(true);
       setIsModalOpen(false);
     } catch {
       setErrorMessage("Terjadi gangguan jaringan saat menyimpan kategori");
+      refreshData(true);
     } finally {
       setIsSaving(false);
     }
@@ -117,6 +118,7 @@ export default function CategoriesPage() {
   const handleDeleteCategory = async (id: string) => {
     if (!confirm("Hapus kategori ini? Transaksi terkait tidak akan terhapus.")) return;
 
+    mutateCategories((prev) => prev.filter((c) => c.id !== id));
     try {
       const res = await fetch(`/api/categories/${id}`, {
         method: "DELETE",
@@ -124,11 +126,13 @@ export default function CategoriesPage() {
       const json = await res.json();
       if (!res.ok || json.error) {
         alert(json.error?.message || "Gagal menghapus kategori");
+        refreshData(true);
         return;
       }
-      await loadCategories();
+      refreshData(true);
     } catch {
       alert("Terjadi kesalahan jaringan");
+      refreshData(true);
     }
   };
 
@@ -216,52 +220,55 @@ export default function CategoriesPage() {
         onClose={() => setIsModalOpen(false)}
         title={editingCategory ? "Edit Kategori" : "Tambah Kategori Baru"}
       >
-        <form onSubmit={handleSaveCategory} className="space-y-4">
-          {errorMessage && (
-            <div className="p-3 bg-expense/10 text-expense text-[13px] font-medium rounded-control">
-              {errorMessage}
-            </div>
-          )}
+        <form onSubmit={handleSaveCategory} className="flex flex-col flex-1 min-h-0 relative">
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 pb-28">
+            {errorMessage && (
+              <div className="p-3 bg-expense/10 text-expense text-[13px] font-medium rounded-control">
+                {errorMessage}
+              </div>
+            )}
 
-          <div>
-            <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
-              Nama Kategori
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Contoh: Makanan, Transport, Hiburan"
-              required
-              className="w-full bg-field text-text text-[14px] font-medium px-4 py-3 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none"
-            />
-          </div>
-
-          {!editingCategory && (
             <div>
               <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
-                Tipe Transaksi
-              </label>
-              <SegmentedControl value={type} onChange={setType} />
-            </div>
-          )}
-
-          {type === "EXPENSE" && (
-            <div>
-              <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
-                Batas Budget Bulanan (Opsional)
+                Nama Kategori
               </label>
               <input
-                type="number"
-                value={budgetLimit}
-                onChange={(e) => setBudgetLimit(e.target.value)}
-                placeholder="Contoh: 1000000"
-                className="w-full bg-field text-text text-[16px] font-bold px-4 py-3 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none"
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Contoh: Makanan, Transport, Hiburan"
+                required
+                className="w-full bg-field text-text text-[14px] font-medium px-4 py-3 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none"
               />
             </div>
-          )}
 
-          <div className="pt-2">
+            {!editingCategory && (
+              <div>
+                <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
+                  Tipe Transaksi
+                </label>
+                <SegmentedControl value={type} onChange={setType} />
+              </div>
+            )}
+
+            {type === "EXPENSE" && (
+              <div>
+                <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
+                  Batas Budget Bulanan (Opsional)
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={budgetLimit}
+                  onChange={(e) => setBudgetLimit(formatCurrencyInput(e.target.value))}
+                  placeholder="Rp 0 (Contoh: Rp 1.000.000)"
+                  className="w-full bg-field text-text text-[18px] font-bold px-4 py-3 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none"
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="absolute bottom-0 left-0 right-0 p-4 bg-surface/95 backdrop-blur-md border-t border-border z-30 shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
             <Button type="submit" variant="primary" fullWidth isLoading={isSaving}>
               {editingCategory ? "Simpan Perubahan" : "Buat Kategori"}
             </Button>
