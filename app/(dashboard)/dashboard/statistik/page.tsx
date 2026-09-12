@@ -17,10 +17,19 @@ export default function StatisticsPage() {
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
 
+  // Reset slide animation setelah selesai
+  useEffect(() => {
+    if (slideDirection) {
+      const timer = setTimeout(() => setSlideDirection(null), 250);
+      return () => clearTimeout(timer);
+    }
+  }, [slideDirection]);
+
   useEffect(() => {
     const cacheKey = `ft_stats_${period}_${monthOffset}`;
+    let hasCacheHit = false;
 
-    // 1. Render instan dari cache lokal (0ms Delay)
+    // 1. Cek cache lokal untuk bulan yang DITUJU
     if (typeof window !== "undefined") {
       const cached = localStorage.getItem(cacheKey);
       if (cached) {
@@ -28,13 +37,20 @@ export default function StatisticsPage() {
           const parsed = JSON.parse(cached);
           setStats(parsed);
           setIsLoading(false);
+          hasCacheHit = true;
         } catch {
-          // Abaikan
+          // Abaikan cache rusak
         }
       }
     }
 
-    // 2. Sinkronisasi latar belakang
+    // 2. Jika tidak ada cache → hapus data lama agar tidak flash data bulan sebelumnya
+    if (!hasCacheHit) {
+      setStats(null);
+      setIsLoading(true);
+    }
+
+    // 3. Sinkronisasi latar belakang (selalu fetch data segar)
     const fetchStats = async () => {
       try {
         const res = await fetch(
