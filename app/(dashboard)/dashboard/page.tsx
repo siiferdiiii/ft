@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { WalletCard } from "@/components/features/WalletCard";
 import { VoiceMicButton } from "@/components/features/VoiceMicButton";
 import {
@@ -9,6 +10,8 @@ import {
   PreFillTransactionData,
 } from "@/components/features/TransactionConfirmModal";
 import { ReceiptScannerModal } from "@/components/features/ReceiptScannerModal";
+import { DanaAbadiSuggestBanner, IncomeAllocationSuggestion } from "@/components/features/DanaAbadiSuggestBanner";
+import { SimulatorACompoundModal } from "@/components/features/SimulatorACompoundModal";
 import { BottomNav } from "@/components/ui/BottomNav";
 import { CameraIcon, PlusIcon } from "@/components/ui/Icons";
 import { TransactionType, InputSource } from "@/lib/types";
@@ -18,6 +21,7 @@ import { ParsedVoiceResult } from "@/lib/parseVoiceAmount";
 import { useAppData } from "@/lib/context/AppDataContext";
 
 export default function DashboardPage() {
+  const router = useRouter();
   const {
     wallets,
     categories,
@@ -26,14 +30,49 @@ export default function DashboardPage() {
     setActiveWalletId,
     isInitialLoading: isLoading,
     addTransactionOptimistic,
+    transferOptimistic,
     refreshData,
   } = useAppData();
 
   // Modals state
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+  const [isSimAOpen, setIsSimAOpen] = useState(false);
   const [preFillData, setPreFillData] = useState<PreFillTransactionData | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
+  const [userPercent, setUserPercent] = useState<number>(10);
+  const [incomeSuggestion, setIncomeSuggestion] = useState<IncomeAllocationSuggestion | null>(null);
+
+  // Cari dompet Dana Abadi
+  const danaAbadiWallet = wallets.find((w) => Boolean(w.isPerpetualFund));
+
+  // Ambil pengaturan persentase alokasi & cache saran income aktif
+  useEffect(() => {
+    const loadSettingsAndCache = async () => {
+      try {
+        const res = await fetch("/api/user/settings");
+        const json = await res.json();
+        if (json.data?.perpetualFundPercent) {
+          setUserPercent(json.data.perpetualFundPercent);
+        }
+      } catch {
+        // Fallback default 10%
+      }
+
+      if (typeof window !== "undefined") {
+        try {
+          const cached = localStorage.getItem("ft_pending_income_suggestion");
+          if (cached) {
+            setIncomeSuggestion(JSON.parse(cached));
+          }
+        } catch {
+          // Abaikan
+        }
+      }
+    };
+
+    loadSettingsAndCache();
+  }, []);
 
   // Total kumulasi saldo seluruh dompet
   const totalBalance = wallets.reduce((sum, w) => sum + w.balance, 0);
@@ -89,6 +128,81 @@ export default function DashboardPage() {
     const result = await addTransactionOptimistic(txData);
     if (!result.success && result.error) {
       handleNotification(result.error);
+      return;
+    }
+
+    // Setiap transaksi tipe INCOME tersimpan -> hitung amount * (User.perpetualFundPercent / 100)
+    // dan tampilkan banner non-blocking per PRD §3.2
+    if (txData.type === "INCOME") {
+      const percent = userPercent || 10;
+      const allocAmount = Math.round(txData.amount * (percent / 100));
+      const sourceW = wallets.find((w) => w.id === txData.walletId);
+      const suggestion: IncomeAllocationSuggestion = {
+        incomeAmount: txData.amount,
+        allocationAmount: allocAmount,
+        sourceWalletId: txData.walletId,
+        sourceWalletName: sourceW?.name || "Dompet Asal",
+        percent,
+      };
+
+      setIncomeSuggestion(suggestion);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("ft_pending_income_suggestion", JSON.stringify(suggestion));
+      }
+    }
+  };
+
+  const handleAllocate = async (amount: number, fromWalletId: string, toWalletId: string) => {
+    transferOptimistic(fromWalletId, toWalletId, amount);
+    try {
+      const res = await fetch("/api/transfers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fromWalletId,
+          toWalletId,
+          amount,
+          note: "Alokasi Otomatis Dana Abadi",
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        handleNotification(json.error?.message || "Gagal mengalokasikan ke Dana Abadi");
+      } else {
+        handleNotification(`Berhasil mengalokasikan ${formatCurrency(amount)} ke Dana Abadi!`);
+      }
+    } catch {
+      handleNotification("Terjadi kendala jaringan saat mentransfer alokasi");
+    } finally {
+      setIncomeSuggestion(null);
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("ft_pending_income_suggestion");
+        localStorage.setItem("ft_dana_abadi_consecutive_skips", "0");
+      }
+      refreshData(true);
+    }
+  };
+
+  const handleSkipAllocation = () => {
+    setIncomeSuggestion(null);
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("ft_pending_income_suggestion");
+      const currentSkips = parseInt(
+        localStorage.getItem("ft_dana_abadi_consecutive_skips") || "0",
+        10
+      );
+      const nextSkips = currentSkips + 1;
+      localStorage.setItem("ft_dana_abadi_consecutive_skips", nextSkips.toString());
+
+      // Kalau user tap "Lewati" 3 kali berturut-turut (hitung dari transaksi income terakhir),
+      // tampilkan Simulator A sebagai popup non-blocking sekali per PRD §3.2
+      if (nextSkips >= 3) {
+        const alreadyShown = localStorage.getItem("ft_sim_a_skip_popup_shown") === "true";
+        if (!alreadyShown) {
+          setIsSimAOpen(true);
+          localStorage.setItem("ft_sim_a_skip_popup_shown", "true");
+        }
+      }
     }
   };
 
@@ -122,6 +236,17 @@ export default function DashboardPage() {
             ✕
           </button>
         </div>
+      )}
+
+      {/* Banner Non-Blocking Auto-Suggest Alokasi Dana Abadi 10% per PRD §3.2 */}
+      {incomeSuggestion && (
+        <DanaAbadiSuggestBanner
+          suggestion={incomeSuggestion}
+          danaAbadiWallet={danaAbadiWallet}
+          onAllocate={handleAllocate}
+          onCreateDanaAbadiWallet={() => router.push("/dashboard/dompet")}
+          onSkip={handleSkipAllocation}
+        />
       )}
 
       {/* Hero Card Total Saldo Kumulatif */}
@@ -275,6 +400,13 @@ export default function DashboardPage() {
         onClose={() => setIsReceiptModalOpen(false)}
         onParsedResult={handleReceiptResult}
         activeWalletId={activeWalletId || (wallets[0]?.id ?? "")}
+      />
+
+      {/* Modal Simulator A saat lewati 3x per PRD §3.2 & §3.3 */}
+      <SimulatorACompoundModal
+        isOpen={isSimAOpen}
+        onClose={() => setIsSimAOpen(false)}
+        initialMonthlyAmount={incomeSuggestion?.allocationAmount || 300000}
       />
 
       {/* Bottom Navigation */}

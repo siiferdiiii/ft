@@ -26,8 +26,15 @@ export async function GET() {
       color: w.color,
       balance: Number(w.balance),
       isArchived: w.isArchived,
+      isPerpetualFund: Boolean(w.isPerpetualFund),
       createdAt: w.createdAt.toISOString(),
     }));
+
+    // Dompet Dana Abadi default selalu di ujung kanan (akhir list) agar dari segi UX tidak mudah terpakai
+    result.sort((a, b) => {
+      if (Boolean(a.isPerpetualFund) === Boolean(b.isPerpetualFund)) return 0;
+      return a.isPerpetualFund ? 1 : -1;
+    });
 
     return apiSuccess(result);
   } catch (error) {
@@ -52,7 +59,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { name, type, color, icon, initialBalance } = parsed.data;
+    const { name, type, color, icon, initialBalance, isPerpetualFund } = parsed.data;
 
     const wallet = await prisma.wallet.create({
       data: {
@@ -62,6 +69,7 @@ export async function POST(req: NextRequest) {
         color: color || null,
         icon: icon || null,
         balance: initialBalance || 0,
+        isPerpetualFund: Boolean(isPerpetualFund),
       },
     });
 
@@ -73,6 +81,7 @@ export async function POST(req: NextRequest) {
       color: wallet.color,
       balance: Number(wallet.balance),
       isArchived: wallet.isArchived,
+      isPerpetualFund: Boolean(wallet.isPerpetualFund),
       createdAt: wallet.createdAt.toISOString(),
     };
 

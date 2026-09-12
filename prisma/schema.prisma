@@ -15,6 +15,7 @@ model User {
   id              String            @id // sama dengan auth.users.id dari Supabase Auth (UUID) — bukan default cuid()
   email           String            @unique // mirror dari auth.users.email, untuk kemudahan query/join
   name            String?
+  perpetualFundPercent Int          @default(10)
   wallets         Wallet[]
   categories      Category[]
   transactions    Transaction[]
@@ -33,6 +34,7 @@ model Wallet {
   color          String?
   balance        Decimal       @default(0) @db.Decimal(14, 2)
   isArchived     Boolean       @default(false)
+  isPerpetualFund Boolean      @default(false)
   transactions   Transaction[]
   transfersFrom  Transfer[]    @relation("TransferFrom")
   transfersTo    Transfer[]    @relation("TransferTo")

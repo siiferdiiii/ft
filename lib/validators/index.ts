@@ -14,6 +14,7 @@ export const walletSchema = z.object({
   color: z.string().optional(),
   icon: z.string().optional(),
   initialBalance: z.number().min(0, "Saldo awal tidak boleh negatif").optional().default(0),
+  isPerpetualFund: z.boolean().optional().default(false),
 });
 
 export const updateWalletSchema = z.object({
@@ -22,6 +23,15 @@ export const updateWalletSchema = z.object({
   color: z.string().optional(),
   icon: z.string().optional(),
   isArchived: z.boolean().optional(),
+  isPerpetualFund: z.boolean().optional(),
+});
+
+export const userSettingsSchema = z.object({
+  perpetualFundPercent: z
+    .number({ invalid_type_error: "Persentase harus berupa angka" })
+    .int("Harus berupa bilangan bulat")
+    .min(1, "Persentase minimal 1%")
+    .max(50, "Persentase maksimal 50%"),
 });
 
 export const categorySchema = z.object({

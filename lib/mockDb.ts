@@ -7,6 +7,7 @@ export interface MockUser {
   id: string;
   email: string;
   name?: string | null;
+  perpetualFundPercent: number;
   createdAt: Date;
 }
 
@@ -19,6 +20,7 @@ export interface MockWallet {
   color: string | null;
   balance: number;
   isArchived: boolean;
+  isPerpetualFund: boolean;
   createdAt: Date;
 }
 
@@ -76,6 +78,7 @@ class MockDatabase {
       id: DEFAULT_USER_ID,
       email: "demo@financetracker.local",
       name: "Demo User",
+      perpetualFundPercent: 10,
       createdAt: new Date(),
     },
   ];
@@ -90,18 +93,8 @@ class MockDatabase {
       color: "#16A34A",
       balance: 750000,
       isArchived: false,
+      isPerpetualFund: false,
       createdAt: new Date(Date.now() - 86400000 * 5),
-    },
-    {
-      id: "w-bank",
-      userId: DEFAULT_USER_ID,
-      name: "Bank BCA",
-      type: "BANK",
-      icon: null,
-      color: "#4E44E5",
-      balance: 4250000,
-      isArchived: false,
-      createdAt: new Date(Date.now() - 86400000 * 4),
     },
     {
       id: "w-ewallet",
@@ -112,7 +105,20 @@ class MockDatabase {
       color: "#06B6D4",
       balance: 320000,
       isArchived: false,
+      isPerpetualFund: false,
       createdAt: new Date(Date.now() - 86400000 * 3),
+    },
+    {
+      id: "w-bank",
+      userId: DEFAULT_USER_ID,
+      name: "Bank BCA",
+      type: "BANK",
+      icon: null,
+      color: "#4E44E5",
+      balance: 4250000,
+      isArchived: false,
+      isPerpetualFund: true,
+      createdAt: new Date(Date.now() - 86400000 * 4),
     },
   ];
 

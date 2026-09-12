@@ -41,6 +41,15 @@ const STORAGE_KEYS = {
   ACTIVE_WALLET: "ft_cache_active_wallet",
 };
 
+// Helper pengurutan dompet: Dompet Dana Abadi default selalu di ujung kanan (akhir list)
+// agar dari segi UX memiliki friksi sadar dan tidak mudah terpakai untuk transaksi harian.
+const sortWalletsByUxFriction = (list: WalletDto[]): WalletDto[] => {
+  return [...list].sort((a, b) => {
+    if (Boolean(a.isPerpetualFund) === Boolean(b.isPerpetualFund)) return 0;
+    return a.isPerpetualFund ? 1 : -1;
+  });
+};
+
 export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [wallets, setWallets] = useState<WalletDto[]>([]);
   const [categories, setCategories] = useState<CategoryDto[]>([]);
@@ -76,7 +85,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (cachedWallets) {
           const parsed = JSON.parse(cachedWallets);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setWallets(parsed);
+            setWallets(sortWalletsByUxFriction(parsed));
             hasCachedData = true;
           }
         }
@@ -138,15 +147,17 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       ]);
 
       if (walletsJson.data && Array.isArray(walletsJson.data)) {
-        setWallets(walletsJson.data);
-        saveToStorage(STORAGE_KEYS.WALLETS, walletsJson.data);
+        const sorted = sortWalletsByUxFriction(walletsJson.data);
+        setWallets(sorted);
+        saveToStorage(STORAGE_KEYS.WALLETS, sorted);
 
-        // Pastikan active wallet valid
+        // Pastikan active wallet valid dan memprioritaskan dompet reguler bukan Dana Abadi
         setActiveWalletIdState((prev) => {
-          if (prev && walletsJson.data.some((w: WalletDto) => w.id === prev)) {
+          if (prev && sorted.some((w: WalletDto) => w.id === prev)) {
             return prev;
           }
-          const defaultId = walletsJson.data[0]?.id || "";
+          const nonPerpetual = sorted.find((w: WalletDto) => !w.isPerpetualFund);
+          const defaultId = nonPerpetual?.id || sorted[0]?.id || "";
           saveToStorage(STORAGE_KEYS.ACTIVE_WALLET, defaultId);
           return defaultId;
         });
@@ -339,9 +350,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const mutateWallets = (updater: WalletDto[] | ((prev: WalletDto[]) => WalletDto[])) => {
     setWallets((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
-      saveToStorage(STORAGE_KEYS.WALLETS, next);
+      const sorted = sortWalletsByUxFriction(next);
+      saveToStorage(STORAGE_KEYS.WALLETS, sorted);
       notifySync();
-      return next;
+      return sorted;
     });
   };
 

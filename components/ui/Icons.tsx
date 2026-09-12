@@ -217,3 +217,70 @@ export const EditIcon: React.FC<IconProps> = ({ className = "w-5 h-5", size }) =
     <path d="M14.06 2.94a2.5 2.5 0 0 1 3.53 0l3.47 3.47a2.5 2.5 0 0 1 0 3.53l-10.6 10.6a2 2 0 0 1-.95.53l-5 1.25a1 1 0 0 1-1.21-1.21l1.25-5c.1-.35.29-.68.53-.95l10.6-10.6z" />
   </svg>
 );
+
+export const InfinityIcon: React.FC<IconProps> = ({ className = "w-5 h-5", size }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    <path d="M18.178 8c5.096 0 5.096 8 0 8-2.67 0-4.67-2.67-6.178-5.33-1.508 2.66-3.508 5.33-6.178 5.33-5.096 0-5.096-8 0-8 2.67 0 4.67 2.67 6.178 5.33 1.508-2.66 3.508-5.33 6.178-5.33z" />
+  </svg>
+);
+
+export const ShieldIcon: React.FC<IconProps> = ({ className = "w-5 h-5", size }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    className={className}
+    aria-hidden="true"
+  >
+    <path
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M12 2.25c.34 0 .66.16.86.43l8.25 10.5c.36.46.28 1.13-.18 1.49-.09.07-.19.12-.3.15L12 18.25 3.37 14.82c-.54-.21-.81-.82-.6-1.36.06-.15.15-.28.27-.38l8.1-10.4c.2-.27.52-.43.86-.43z"
+    />
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+  </svg>
+);
+
+export const SparkleIcon: React.FC<IconProps> = ({ className = "w-5 h-5", size }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    className={className}
+    aria-hidden="true"
+  >
+    <path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4L12 2z" />
+  </svg>
+);
+
+export const TrendingUpIcon: React.FC<IconProps> = ({ className = "w-5 h-5", size }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+    <polyline points="17 6 23 6 23 12" />
+  </svg>
+);
+

@@ -21,32 +21,61 @@ const createMockPrisma = () => {
           ) || null
         );
       },
-      async create({ data }: { data: { id: string; email: string; name?: string | null } }) {
+      async findFirst({ where }: { where?: { id?: string; email?: string } }) {
+        if (!where) return mockDb.users[0] || null;
+        return (
+          mockDb.users.find(
+            (u) =>
+              (where.id && u.id === where.id) ||
+              (where.email && u.email === where.email)
+          ) || null
+        );
+      },
+      async create({ data }: { data: { id: string; email: string; name?: string | null; perpetualFundPercent?: number } }) {
         const u = {
           id: data.id,
           email: data.email,
           name: data.name || null,
+          perpetualFundPercent: data.perpetualFundPercent ?? 10,
           createdAt: new Date(),
         };
         mockDb.users.push(u);
         return u;
       },
+      async update({
+        where,
+        data,
+      }: {
+        where: { id: string };
+        data: {
+          name?: string;
+          perpetualFundPercent?: number;
+        };
+      }) {
+        const user = mockDb.users.find((u) => u.id === where.id);
+        if (!user) throw new Error("User not found");
+        if (data.name !== undefined) user.name = data.name;
+        if (data.perpetualFundPercent !== undefined) user.perpetualFundPercent = data.perpetualFundPercent;
+        return user;
+      },
     },
 
     wallet: {
-      async findMany({ where }: { where: { userId: string; isArchived?: boolean } }) {
+      async findMany({ where }: { where: { userId: string; isArchived?: boolean; isPerpetualFund?: boolean } }) {
         return mockDb.wallets.filter(
           (w) =>
             w.userId === where.userId &&
-            (where.isArchived === undefined || w.isArchived === where.isArchived)
+            (where.isArchived === undefined || w.isArchived === where.isArchived) &&
+            (where.isPerpetualFund === undefined || w.isPerpetualFund === where.isPerpetualFund)
         );
       },
-      async findFirst({ where }: { where: { id?: string; userId?: string } }) {
+      async findFirst({ where }: { where: { id?: string; userId?: string; isPerpetualFund?: boolean } }) {
         return (
           mockDb.wallets.find(
             (w) =>
               (!where.id || w.id === where.id) &&
-              (!where.userId || w.userId === where.userId)
+              (!where.userId || w.userId === where.userId) &&
+              (where.isPerpetualFund === undefined || w.isPerpetualFund === where.isPerpetualFund)
           ) || null
         );
       },
@@ -60,6 +89,7 @@ const createMockPrisma = () => {
           color?: string | null;
           icon?: string | null;
           balance?: number;
+          isPerpetualFund?: boolean;
         };
       }) {
         const newWallet = {
@@ -71,6 +101,7 @@ const createMockPrisma = () => {
           icon: data.icon || null,
           balance: data.balance || 0,
           isArchived: false,
+          isPerpetualFund: Boolean(data.isPerpetualFund),
           createdAt: new Date(),
         };
         mockDb.wallets.push(newWallet);
@@ -85,6 +116,7 @@ const createMockPrisma = () => {
           name?: string;
           type?: "CASH" | "EWALLET" | "BANK" | "OTHER";
           isArchived?: boolean;
+          isPerpetualFund?: boolean;
           balance?: { increment?: number; decrement?: number } | number;
         };
       }) {
@@ -94,6 +126,7 @@ const createMockPrisma = () => {
         if (data.name !== undefined) wallet.name = data.name;
         if (data.type !== undefined) wallet.type = data.type;
         if (data.isArchived !== undefined) wallet.isArchived = data.isArchived;
+        if (data.isPerpetualFund !== undefined) wallet.isPerpetualFund = data.isPerpetualFund;
         if (data.balance !== undefined) {
           if (typeof data.balance === "number") {
             wallet.balance = data.balance;

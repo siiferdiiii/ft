@@ -15,7 +15,28 @@ export interface WalletDto {
   color: string | null;
   balance: number;
   isArchived: boolean;
+  isPerpetualFund: boolean;
   createdAt: string;
+}
+
+export interface UserSettingsDto {
+  perpetualFundPercent: number;
+  email?: string;
+  name?: string | null;
+}
+
+export interface DanaAbadiStatsDto {
+  totalDanaAbadiBalance: number;
+  danaAbadiWalletCount: number;
+  danaAbadiWallets: Array<{
+    id: string;
+    name: string;
+    type: WalletType;
+    balance: number;
+  }>;
+  perpetualFundPercent: number;
+  monthlyAllocationAverage: number;
+  annualExpenseTotal: number;
 }
 
 export interface CategoryDto {

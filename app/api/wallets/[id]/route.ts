@@ -45,6 +45,7 @@ export async function PATCH(
       color: updated.color,
       balance: Number(updated.balance),
       isArchived: updated.isArchived,
+      isPerpetualFund: Boolean(updated.isPerpetualFund),
       createdAt: updated.createdAt.toISOString(),
     });
   } catch (error) {

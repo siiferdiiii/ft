@@ -7,6 +7,7 @@ import { SegmentedControl } from "../ui/SegmentedControl";
 import { CategoryBudgetButton } from "./CategoryBudgetButton";
 import { WalletDto, CategoryDto, TransactionType, InputSource } from "@/lib/types";
 import { formatCurrencyInput, parseCurrencyInput } from "@/lib/currency";
+import { InfinityIcon } from "../ui/Icons";
 
 export interface PreFillTransactionData {
   type: TransactionType;
@@ -59,6 +60,7 @@ export const TransactionConfirmModal: React.FC<TransactionConfirmModalProps> = (
   );
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showPerpetualConfirm, setShowPerpetualConfirm] = useState(false);
 
   useEffect(() => {
     if (initialData) {
@@ -73,37 +75,21 @@ export const TransactionConfirmModal: React.FC<TransactionConfirmModalProps> = (
         setTransactionDate(new Date().toISOString().slice(0, 10));
       }
       setErrorMessage(null);
+      setShowPerpetualConfirm(false);
     }
   }, [initialData, wallets]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage(null);
-
-    const numericAmount = parseCurrencyInput(amount);
-    if (numericAmount <= 0) {
-      setErrorMessage("Nominal transaksi harus lebih dari 0");
-      return;
-    }
-
-    const effectiveWalletId = walletId || (wallets[0]?.id ?? "");
-    if (!effectiveWalletId) {
-      setErrorMessage("Pilih dompet untuk transaksi ini");
-      return;
-    }
-
-    const payload = {
-      walletId: effectiveWalletId,
-      categoryId: categoryId || null,
-      type,
-      amount: numericAmount,
-      note: note.trim() || null,
-      source: initialData?.source || "MANUAL",
-      rawInput: initialData?.rawInput || null,
-      receiptImageUrl: initialData?.receiptImageUrl || null,
-      transactionDate: new Date(transactionDate).toISOString(),
-    };
-
+  const executeSave = async (payload: {
+    walletId: string;
+    categoryId: string | null;
+    type: TransactionType;
+    amount: number;
+    note: string | null;
+    source: InputSource;
+    rawInput: string | null;
+    receiptImageUrl: string | null;
+    transactionDate: string;
+  }) => {
     // Jika mode Optimistic UI aktif, langsung tutup modal & kirim ke state dashboard (0ms!)
     if (onSave) {
       onClose();
@@ -132,6 +118,45 @@ export const TransactionConfirmModal: React.FC<TransactionConfirmModalProps> = (
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+
+    const numericAmount = parseCurrencyInput(amount);
+    if (numericAmount <= 0) {
+      setErrorMessage("Nominal transaksi harus lebih dari 0");
+      return;
+    }
+
+    const effectiveWalletId = walletId || (wallets[0]?.id ?? "");
+    if (!effectiveWalletId) {
+      setErrorMessage("Pilih dompet untuk transaksi ini");
+      return;
+    }
+
+    const selectedWallet = wallets.find((w) => w.id === effectiveWalletId);
+
+    // Cek friksi sadar jika pengeluaran dari dompet Dana Abadi per PRD §3.1
+    if (type === "EXPENSE" && selectedWallet?.isPerpetualFund && !showPerpetualConfirm) {
+      setShowPerpetualConfirm(true);
+      return;
+    }
+
+    const payload = {
+      walletId: effectiveWalletId,
+      categoryId: categoryId || null,
+      type,
+      amount: numericAmount,
+      note: note.trim() || null,
+      source: initialData?.source || "MANUAL",
+      rawInput: initialData?.rawInput || null,
+      receiptImageUrl: initialData?.receiptImageUrl || null,
+      transactionDate: new Date(transactionDate).toISOString(),
+    };
+
+    await executeSave(payload);
   };
 
   const isVoice = initialData?.source === "VOICE";
@@ -179,6 +204,35 @@ export const TransactionConfirmModal: React.FC<TransactionConfirmModalProps> = (
               <SegmentedControl value={type} onChange={setType} />
             </div>
           )}
+
+          {/* Pilihan Dompet */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-[12px] font-medium text-text-secondary">
+                Dompet
+              </label>
+              {wallets.find((w) => w.id === (walletId || wallets[0]?.id))?.isPerpetualFund && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary">
+                  <InfinityIcon className="w-3 h-3" />
+                  Dana Abadi
+                </span>
+              )}
+            </div>
+            <select
+              value={walletId || (wallets[0]?.id ?? "")}
+              onChange={(e) => {
+                setWalletId(e.target.value);
+                setShowPerpetualConfirm(false);
+              }}
+              className="w-full bg-field text-text text-[14px] font-medium px-4 py-2.5 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none"
+            >
+              {wallets.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name} ({w.type}){w.isPerpetualFund ? " — ★ Dana Abadi" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
 
           {/* Nominal jumlah hero input */}
           <div>
@@ -263,6 +317,52 @@ export const TransactionConfirmModal: React.FC<TransactionConfirmModalProps> = (
             Simpan Transaksi
           </Button>
         </div>
+
+        {/* Dialog Friksi Sadar Pengeluaran Dana Abadi per PRD §3.1 */}
+        {showPerpetualConfirm && (
+          <div className="absolute inset-0 bg-surface/98 backdrop-blur-md z-40 flex flex-col justify-center items-center p-6 text-center animate-in fade-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-3">
+              <InfinityIcon className="w-6 h-6" />
+            </div>
+            <h3 className="text-[17px] font-bold text-text mb-2">
+              Ini dari Dana Abadi kamu, lanjutkan?
+            </h3>
+            <p className="text-[13px] text-text-secondary leading-relaxed mb-6 max-w-[280px]">
+              Dompet ini disiapkan untuk disimpan dan dikembangkan jangka panjang. Anda tetap dapat melanjutkan bila ini pengeluaran yang memang disadari.
+            </p>
+            <div className="w-full space-y-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  const numericAmount = parseCurrencyInput(amount);
+                  const effectiveWalletId = walletId || (wallets[0]?.id ?? "");
+                  setShowPerpetualConfirm(false);
+                  executeSave({
+                    walletId: effectiveWalletId,
+                    categoryId: categoryId || null,
+                    type,
+                    amount: numericAmount,
+                    note: note.trim() || null,
+                    source: initialData?.source || "MANUAL",
+                    rawInput: initialData?.rawInput || null,
+                    receiptImageUrl: initialData?.receiptImageUrl || null,
+                    transactionDate: new Date(transactionDate).toISOString(),
+                  });
+                }}
+                className="w-full py-3 bg-primary text-white text-[14px] font-bold rounded-control hover:opacity-90 active:scale-[0.98] transition-all"
+              >
+                Lanjutkan
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowPerpetualConfirm(false)}
+                className="w-full py-3 bg-field text-text text-[14px] font-semibold rounded-control hover:bg-border/60 active:scale-[0.98] transition-all"
+              >
+                Batal
+              </button>
+            </div>
+          </div>
+        )}
       </form>
     </BottomSheet>
   );
