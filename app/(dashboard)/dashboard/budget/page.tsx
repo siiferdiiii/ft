@@ -8,6 +8,8 @@ import { EditIcon } from "@/components/ui/Icons";
 import { CategoryDto } from "@/lib/types";
 import { formatCurrency, formatCurrencyInput, parseCurrencyInput } from "@/lib/currency";
 import { useAppData } from "@/lib/context/AppDataContext";
+import { BudgetInterviewModal } from "@/components/features/BudgetInterviewModal";
+import { BudgetInterviewBanner } from "@/components/features/BudgetInterviewBanner";
 
 export default function BudgetPage() {
   const {
@@ -24,6 +26,22 @@ export default function BudgetPage() {
   const [budgetLimitInput, setBudgetLimitInput] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // AI Interview modal state
+  const [isInterviewOpen, setIsInterviewOpen] = useState(false);
+  const [perpetualFundPercent, setPerpetualFundPercent] = useState(10);
+
+  // Fetch perpetualFundPercent dari user settings untuk dikirim ke modal AI
+  useEffect(() => {
+    fetch("/api/user/settings")
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.data?.perpetualFundPercent) {
+          setPerpetualFundPercent(json.data.perpetualFundPercent);
+        }
+      })
+      .catch(() => { /* abaikan jika gagal, default 10% sudah memadai */ });
+  }, []);
 
   const handleOpenEdit = (category: CategoryDto) => {
     setSelectedCategory(category);
@@ -103,12 +121,36 @@ export default function BudgetPage() {
 
   return (
     <div className="flex-1 flex flex-col px-5 pt-6 pb-24 space-y-5">
-      <div>
-        <span className="text-[12px] font-medium text-text-secondary block">
-          Manajemen Pengeluaran
-        </span>
-        <h1 className="text-[20px] font-bold text-text">Budget Bulanan</h1>
+      {/* Header + tombol AI */}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <span className="text-[12px] font-medium text-text-secondary block">
+            Manajemen Pengeluaran
+          </span>
+          <h1 className="text-[20px] font-bold text-text">Budget Bulanan</h1>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsInterviewOpen(true)}
+          id="btn-ai-budget-interview"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-[12px] bg-chip text-primary text-[12px] font-semibold hover:bg-primary/10 transition-colors flex-shrink-0 mt-1"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="4" width="10" height="7" rx="2" fill="#4E44E5" opacity="0.2"/>
+            <rect x="4" y="2" width="6" height="4" rx="1.5" fill="#4E44E5"/>
+            <circle cx="5.5" cy="4" r="0.8" fill="white"/>
+            <circle cx="8.5" cy="4" r="0.8" fill="white"/>
+            <path d="M5 6.5h4" stroke="#4E44E5" strokeWidth="1" strokeLinecap="round"/>
+          </svg>
+          Susun dengan AI
+        </button>
       </div>
+
+      {/* Banner otomatis untuk user baru tanpa budget */}
+      <BudgetInterviewBanner
+        categories={allCategories}
+        onStartInterview={() => setIsInterviewOpen(true)}
+      />
 
       {/* Info Card */}
       <div className="bg-surface p-4 rounded-card-lg border border-border">
@@ -249,6 +291,15 @@ export default function BudgetPage() {
           </div>
         </form>
       </BottomSheet>
+
+      {/* Modal AI Budget Interview */}
+      <BudgetInterviewModal
+        isOpen={isInterviewOpen}
+        onClose={() => setIsInterviewOpen(false)}
+        expenseCategories={categories}
+        perpetualFundPercent={perpetualFundPercent}
+        onDone={() => refreshData(true)}
+      />
 
       <BottomNav />
     </div>

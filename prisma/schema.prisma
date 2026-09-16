@@ -16,6 +16,7 @@ model User {
   email           String            @unique // mirror dari auth.users.email, untuk kemudahan query/join
   name            String?
   perpetualFundPercent Int          @default(10)
+  monthlyIncome   Decimal?          @db.Decimal(14, 2) // Disimpan agar interview berikutnya bisa konfirmasi, bukan tanya ulang dari nol
   wallets         Wallet[]
   categories      Category[]
   transactions    Transaction[]

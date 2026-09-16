@@ -94,3 +94,43 @@ export const transferSchema = z.object({
 export const suggestCategorySchema = z.object({
   rawInput: z.string().min(1, "Teks input suara wajib ada"),
 });
+
+// Schema untuk validasi pesan percakapan multi-turn ke API AI Budget Interview
+export const budgetInterviewSchema = z.object({
+  messages: z
+    .array(
+      z.object({
+        role: z.enum(["user", "model"]),
+        content: z.string().min(1).max(2000, "Pesan terlalu panjang"),
+      })
+    )
+    .min(0)
+    .max(24, "Terlalu banyak putaran percakapan"), // 12 putaran × 2 sisi (user + model)
+  monthlyIncomeHint: z.number().positive().optional(), // income yang disebut user di tengah percakapan
+});
+
+// Schema untuk konfirmasi akhir — menyimpan hasil interview ke database
+export const applyBudgetSchema = z.object({
+  budgets: z
+    .array(
+      z.object({
+        categoryId: z.string().min(1),
+        budgetLimit: z
+          .number()
+          .positive("Budget harus lebih dari 0")
+          .max(100_000_000_000, "Nilai melebihi batas"),
+      })
+    )
+    .min(1, "Minimal satu kategori harus diatur"),
+  perpetualFundPercent: z
+    .number()
+    .int()
+    .min(1)
+    .max(50)
+    .optional(),
+  monthlyIncome: z
+    .number()
+    .positive()
+    .max(100_000_000_000)
+    .optional(),
+});
