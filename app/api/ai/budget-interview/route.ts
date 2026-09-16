@@ -115,13 +115,12 @@ ATURAN PENTING:
       },
     };
 
-    const { res: geminiRes, status: geminiStatus, allQuotaExceeded } =
+    const { res: geminiRes, status: geminiStatus, allQuotaExceeded, errorDetail, data: geminiDataRaw } =
       await callGeminiWithFailover(geminiPayload);
 
-    // Handle jika semua key terkena kuota/rate limit (429)
+    // Handle jika semua key terkena kuota/rate limit (429) atau gagal
     if (!geminiRes || !geminiRes.ok) {
-      const errDetail = geminiRes ? await geminiRes.text().catch(() => "") : "";
-      console.error("Gemini call failed with status:", geminiStatus, errDetail);
+      console.error("Gemini call failed with status:", geminiStatus, errorDetail);
       if (allQuotaExceeded || geminiStatus === 429) {
         return apiError(
           "QUOTA_EXCEEDED",
@@ -129,16 +128,23 @@ ATURAN PENTING:
           429
         );
       }
-      return apiError("AI_ERROR", "Terjadi gangguan saat menghubungi asisten AI. Silakan coba lagi.", 502);
+      return apiError(
+        "AI_ERROR",
+        `Terjadi gangguan saat menghubungi asisten AI (${geminiStatus}): ${errorDetail || "Tidak ada respons"}`,
+        502
+      );
     }
 
-    const geminiData = await geminiRes.json();
+    const geminiData = geminiDataRaw as {
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    };
     const rawReply = (geminiData?.candidates?.[0]?.content?.parts || [])
-      .map((p: { text?: string }) => p.text || "")
+      .map((p) => p.text || "")
       .join("")
       .trim();
 
     if (!rawReply) {
+      console.error("Gemini returned empty reply. Raw response:", JSON.stringify(geminiData));
       return apiError("AI_ERROR", "Asisten AI tidak memberikan respons. Silakan coba lagi.", 502);
     }
 

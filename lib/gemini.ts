@@ -1,19 +1,20 @@
 /**
  * Helper untuk manajemen multi-key Google Gemini API.
- * Mendukung Round-Robin Load Balancing dan Automatic Failover jika terkena rate-limit (429).
+ * Mendukung Round-Robin Load Balancing dan Automatic Failover jika terkena rate-limit (429)
+ * atau key tidak valid / error server.
  */
 
 let currentKeyIndex = 0;
 
 /**
  * Mengambil array API keys dari environment variable.
- * Mendukung GEMINI_API_KEYS atau GEMINI_API_KEY (dipisahkan tanda koma jika lebih dari satu).
+ * Membersihkan tanda kutip ("), (') dan spasi/karakter whitespace secara agresif.
  */
 export function getGeminiApiKeys(): string[] {
   const raw = process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || "";
   return raw
     .split(",")
-    .map((k) => k.trim())
+    .map((k) => k.replace(/["'\r\n\t]/g, "").trim())
     .filter(Boolean);
 }
 
@@ -36,12 +37,13 @@ export interface GeminiCallResult {
   status: number;
   allQuotaExceeded: boolean;
   errorDetail?: string;
+  data?: unknown;
 }
 
 /**
  * Melakukan pemanggilan REST API Gemini dengan failover otomatis antar-key.
- * Jika key pertama terkena rate limit (429) atau error server, sistem otomatis
- * mencoba key cadangan berikutnya tanpa membuat request user gagal.
+ * Jika key terkena rate limit (429), key tidak valid (400), atau error server (5xx),
+ * sistem otomatis mencoba key cadangan berikutnya tanpa membuat request user gagal.
  */
 export async function callGeminiWithFailover(
   payload: unknown,
@@ -72,38 +74,40 @@ export async function callGeminiWithFailover(
         body: JSON.stringify(payload),
       });
 
-      // Jika kuota/rate-limit habis (429)
-      if (res.status === 429) {
-        console.warn(
-          `[Gemini Rotation] Key #${i + 1} terkena rate-limit (429). Mencoba key berikutnya (${i + 1}/${keys.length})...`
-        );
-        lastStatus = 429;
-        continue;
-      }
-
-      // Jika error 400 (Bad Request), masalah pada format prompt/payload, jangan buang key lain
-      if (res.status === 400) {
-        return { res, status: 400, allQuotaExceeded: false };
-      }
-
-      // Jika 403 (Invalid key/leaked/quota habis) atau 5xx (Google server error), coba key berikutnya
-      if (res.status === 403 || res.status >= 500) {
-        lastErrText = await res.text().catch(() => "");
-        console.warn(
-          `[Gemini Rotation] Key #${i + 1} error status ${res.status}. Mencoba key berikutnya...`,
-          lastErrText
-        );
-        all429 = false;
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
         lastStatus = res.status;
-        continue;
+        lastErrText = errText;
+
+        // Jika kuota habis (429), key bermasalah (400 API_KEY_INVALID), forbidden (403), atau server Google error (5xx)
+        // -> Coba key cadangan berikutnya!
+        const isKeyOrQuotaError =
+          res.status === 429 ||
+          res.status === 403 ||
+          res.status >= 500 ||
+          (res.status === 400 && errText.includes("API_KEY_INVALID"));
+
+        if (isKeyOrQuotaError) {
+          console.warn(
+            `[Gemini Rotation] Key #${i + 1} (${apiKey.slice(0, 6)}...${apiKey.slice(-4)}) gagal dengan status ${res.status}. Mencoba key berikutnya...`,
+            errText
+          );
+          if (res.status !== 429) all429 = false;
+          continue;
+        }
+
+        // Error lain yang bukan terkait key (misal prompt ditolak karena safety dsb)
+        return { res: null, status: res.status, allQuotaExceeded: false, errorDetail: errText };
       }
 
-      // Respon sukses / valid
-      return { res, status: res.status, allQuotaExceeded: false };
+      // Respon sukses (200 OK)
+      const data = await res.json();
+      return { res, status: res.status, allQuotaExceeded: false, data };
     } catch (err) {
       console.error(`[Gemini Rotation] Exception saat fetch dengan key #${i + 1}:`, err);
       all429 = false;
       lastStatus = 500;
+      lastErrText = String(err);
       continue;
     }
   }
