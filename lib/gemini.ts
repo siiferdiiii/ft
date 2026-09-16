@@ -45,7 +45,7 @@ export interface GeminiCallResult {
  */
 export async function callGeminiWithFailover(
   payload: unknown,
-  model = "gemini-1.5-flash-latest"
+  model = process.env.GEMINI_MODEL || "gemini-2.5-flash"
 ): Promise<GeminiCallResult> {
   const keys = getOrderedGeminiKeys();
 

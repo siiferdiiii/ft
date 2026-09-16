@@ -116,6 +116,8 @@ ATURAN PENTING:
 
     // Handle jika semua key terkena kuota/rate limit (429)
     if (!geminiRes || !geminiRes.ok) {
+      const errDetail = geminiRes ? await geminiRes.text().catch(() => "") : "";
+      console.error("Gemini call failed with status:", geminiStatus, errDetail);
       if (allQuotaExceeded || geminiStatus === 429) {
         return apiError(
           "QUOTA_EXCEEDED",
