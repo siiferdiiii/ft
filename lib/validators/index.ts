@@ -105,7 +105,7 @@ export const budgetInterviewSchema = z.object({
       })
     )
     .min(0)
-    .max(24, "Terlalu banyak putaran percakapan"), // 12 putaran × 2 sisi (user + model)
+    .max(100, "Terlalu banyak putaran percakapan"), // Dilonggarkan untuk fase uji coba
   monthlyIncomeHint: z.number().positive().optional(), // income yang disebut user di tengah percakapan
 });
 

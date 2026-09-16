@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/Button";
@@ -112,7 +112,7 @@ export const BudgetInterviewModal: React.FC<BudgetInterviewModalProps> = ({
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const turnCountRef = useRef(0);
-  const MAX_TURNS = 12;
+  const MAX_TURNS = 50; // Dilonggarkan untuk fase uji coba
 
   // Reset state saat modal dibuka/tutup
   useEffect(() => {
@@ -170,9 +170,9 @@ export const BudgetInterviewModal: React.FC<BudgetInterviewModalProps> = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isListening]);
 
-  // Blok kuota: cek sebelum mulai
-  const sessionCount = getSessionCount();
-  const isRateLimited = sessionCount >= MAX_SESSIONS_PER_MONTH;
+  // Blok kuota: di-hide/dinonaktifkan sementara untuk fase uji coba
+  // const sessionCount = getSessionCount();
+  const isRateLimited = false;
 
   // ── Kirim pesan ke AI ────────────────────────────────────────────────────────
 
@@ -242,7 +242,7 @@ export const BudgetInterviewModal: React.FC<BudgetInterviewModalProps> = ({
 
   const handleStartInterview = useCallback(async () => {
     if (isRateLimited) return;
-    incrementSessionCount();
+    // incrementSessionCount(); // dinonaktifkan sementara untuk uji coba
     setPhase("TALKING");
     // Kirim dengan messages kosong → server return sapaan pembuka tanpa panggil Gemini
     await sendToAI([]);
