@@ -108,7 +108,11 @@ ATURAN PENTING:
         role: m.role,
         parts: [{ text: m.content }],
       })),
-      generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 1024,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
     };
 
     const { res: geminiRes, status: geminiStatus, allQuotaExceeded } =
@@ -129,7 +133,10 @@ ATURAN PENTING:
     }
 
     const geminiData = await geminiRes.json();
-    const rawReply: string = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    const rawReply = (geminiData?.candidates?.[0]?.content?.parts || [])
+      .map((p: { text?: string }) => p.text || "")
+      .join("")
+      .trim();
 
     if (!rawReply) {
       return apiError("AI_ERROR", "Asisten AI tidak memberikan respons. Silakan coba lagi.", 502);
