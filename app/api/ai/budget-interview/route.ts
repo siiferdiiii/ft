@@ -1,8 +1,9 @@
-﻿import { NextRequest } from "next/server";
+import { NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { budgetInterviewSchema } from "@/lib/validators";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { callGeminiWithFailover, getGeminiApiKeys } from "@/lib/gemini";
 
 // Endpoint POST: terima riwayat percakapan multi-turn, kirim ke Gemini, return balasan AI.
 // State percakapan tidak disimpan ke DB - hanya ada di client session (sesuai PRD §2.2).
@@ -23,8 +24,8 @@ export async function POST(req: NextRequest): Promise<Response> {
 
     const { messages, monthlyIncomeHint } = parsed.data;
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
+    const apiKeys = getGeminiApiKeys();
+    if (apiKeys.length === 0) {
       return apiError(
         "CONFIG_ERROR",
         "Fitur AI belum dikonfigurasi. Silakan hubungi developer untuk mengatur GEMINI_API_KEY.",
@@ -110,27 +111,18 @@ ATURAN PENTING:
       generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
     };
 
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(geminiPayload),
+    const { res: geminiRes, status: geminiStatus, allQuotaExceeded } =
+      await callGeminiWithFailover(geminiPayload);
+
+    // Handle jika semua key terkena kuota/rate limit (429)
+    if (!geminiRes || !geminiRes.ok) {
+      if (allQuotaExceeded || geminiStatus === 429) {
+        return apiError(
+          "QUOTA_EXCEEDED",
+          "Fitur AI lagi sibuk - seluruh kuota harian sedang penuh. Coba lagi nanti, atau gunakan 'Hitung otomatis dari histori' sebagai alternatif.",
+          429
+        );
       }
-    );
-
-    // Handle kuota habis (429) dengan pesan ramah ke user - sesuai PRD §5
-    if (geminiRes.status === 429) {
-      return apiError(
-        "QUOTA_EXCEEDED",
-        "Fitur AI lagi sibuk - kuota harian sedang penuh. Coba lagi besok, atau gunakan 'Hitung otomatis dari histori' sebagai alternatif.",
-        429
-      );
-    }
-
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text().catch(() => "");
-      console.error("Gemini API error:", geminiRes.status, errText);
       return apiError("AI_ERROR", "Terjadi gangguan saat menghubungi asisten AI. Silakan coba lagi.", 502);
     }
 
