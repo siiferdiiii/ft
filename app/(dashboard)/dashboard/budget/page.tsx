@@ -21,6 +21,13 @@ export default function BudgetPage() {
 
   const categories = allCategories.filter((c) => c.type === "EXPENSE");
 
+  // Ringkasan anggaran bulanan
+  const totalBudget = categories.reduce((sum, c) => sum + (c.budgetLimit || 0), 0);
+  const totalSpent = categories.reduce((sum, c) => sum + (c.currentExpense || 0), 0);
+  const totalRemaining = Math.max(0, totalBudget - totalSpent);
+  const spentPercent = totalBudget > 0 ? Math.min(100, Math.round((totalSpent / totalBudget) * 100)) : 0;
+  const isOverBudget = totalBudget > 0 && totalSpent > totalBudget;
+
   // Edit budget modal state
   const [selectedCategory, setSelectedCategory] = useState<CategoryDto | null>(null);
   const [budgetLimitInput, setBudgetLimitInput] = useState<string>("");
@@ -152,27 +159,72 @@ export default function BudgetPage() {
         onStartInterview={() => setIsInterviewOpen(true)}
       />
 
-      {/* Info Card */}
-      <div className="bg-surface p-4 rounded-card-lg border border-border">
-        <h2 className="text-[13px] font-semibold text-text mb-1">
-          Indikator Warna Sisa Budget
-        </h2>
-        <div className="grid grid-cols-2 gap-2 mt-3 text-[11px] text-text-secondary">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-budget-green" />
-            <span>&gt; 80% (Aman)</span>
+      {/* Ringkasan Anggaran Bulanan (Total Anggaran, Tersisa, Terpakai) */}
+      <div className="bg-surface p-5 rounded-[20px] border border-border shadow-sm space-y-4">
+        <div>
+          <span className="text-[12px] font-medium text-text-secondary block">
+            Total Anggaran Bulanan
+          </span>
+          <div className="flex items-baseline justify-between mt-1">
+            <h2 className="text-[26px] font-bold text-text tracking-tight">
+              {formatCurrency(totalBudget)}
+            </h2>
+            {totalBudget > 0 && (
+              <span
+                className={`text-[12px] font-semibold px-2.5 py-0.5 rounded-full ${
+                  isOverBudget
+                    ? "bg-expense/10 text-expense"
+                    : "bg-primary/10 text-primary"
+                }`}
+              >
+                {isOverBudget ? "Melebihi Anggaran" : `Terpakai ${spentPercent}%`}
+              </span>
+            )}
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-budget-yellow" />
-            <span>50% - 80% (Waspada)</span>
+        </div>
+
+        {/* Progress Bar Pemakaian Anggaran Keseluruhan */}
+        {totalBudget > 0 && (
+          <div className="w-full bg-field h-2.5 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-300 ${
+                isOverBudget
+                  ? "bg-expense"
+                  : spentPercent > 80
+                  ? "bg-budget-orange"
+                  : spentPercent > 50
+                  ? "bg-budget-yellow"
+                  : "bg-primary"
+              }`}
+              style={{ width: `${Math.min(100, spentPercent)}%` }}
+            />
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-budget-orange" />
-            <span>20% - 50% (Kritis)</span>
+        )}
+
+        {/* Total Tersisa & Total Terpakai */}
+        <div className="grid grid-cols-2 gap-3 pt-1 border-t border-border/60">
+          <div className="bg-field/70 rounded-[14px] p-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className="w-2 h-2 rounded-full bg-income" />
+              <span className="text-[11px] font-medium text-text-secondary">
+                Total Tersisa
+              </span>
+            </div>
+            <p className="text-[16px] font-bold text-income">
+              {formatCurrency(totalRemaining)}
+            </p>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-budget-red" />
-            <span>&lt; 20% (Habis)</span>
+
+          <div className="bg-field/70 rounded-[14px] p-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className="w-2 h-2 rounded-full bg-expense" />
+              <span className="text-[11px] font-medium text-text-secondary">
+                Total Terpakai
+              </span>
+            </div>
+            <p className="text-[16px] font-bold text-expense">
+              {formatCurrency(totalSpent)}
+            </p>
           </div>
         </div>
       </div>
