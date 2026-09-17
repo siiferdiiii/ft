@@ -325,9 +325,6 @@ export default function DashboardPage() {
                 <span className="text-[11px] font-medium text-text-secondary block">
                   Dari bulan sebelumnya
                 </span>
-                <span className="text-[10.5px] text-text-secondary block pt-0.5">
-                  Didapat: <span className="font-semibold text-text">{formatCurrency(balanceGrowth.thisMonth.income)}</span> (bln lalu: <span className="font-medium text-text">{formatCurrency(balanceGrowth.prevMonth.income)}</span>)
-                </span>
               </div>
             ) : (
               <div className="text-[11px] text-text-secondary">
