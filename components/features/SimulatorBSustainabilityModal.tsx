@@ -46,14 +46,45 @@ export const SimulatorBSustainabilityModal: React.FC<SimulatorBSustainabilityMod
     }
   }, [savedSimulatedAmount, isOpen]);
 
-  const [annualReturn, setAnnualReturn] = useState<number>(7);
-  const [annualWithdrawal, setAnnualWithdrawal] = useState<number>(
-    initialAnnualExpense > 0 ? initialAnnualExpense : 36000000
-  );
+  // Ambil asumsi return dari Simulator A (Bunga Majemuk) yang tersimpan
+  const getSavedCompoundReturn = () => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("ft_saved_sim_return");
+      if (saved && !isNaN(Number(saved))) return Number(saved);
+    }
+    return 10; // Default 10% jika belum pernah menyimpan
+  };
+
+  const [compoundReturn, setCompoundReturn] = useState<number>(() => getSavedCompoundReturn());
+
+  // Default persentase penarikan: sisakan 4% dari total return (misal 10% -> 6%, 12% -> 8%)
+  const [withdrawalPercent, setWithdrawalPercent] = useState<number>(() => {
+    const ret = getSavedCompoundReturn();
+    return Math.max(1, ret - 4);
+  });
+
   const [useSimulatedFund, setUseSimulatedFund] = useState<boolean>(true);
+
+  // Sinkronisasi saat modal dibuka atau return tersimpan berubah
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedReturn = localStorage.getItem("ft_saved_sim_return");
+      if (savedReturn && !isNaN(Number(savedReturn))) {
+        const ret = Number(savedReturn);
+        setCompoundReturn(ret);
+        setWithdrawalPercent(Math.max(1, ret - 4));
+      }
+    }
+  }, [isOpen]);
 
   // Dana pokok aktif yang diuji untuk ketahanan 50 tahun (default: Dana simulasi hasil investasi)
   const activePrincipal = useSimulatedFund ? simulatedFund : currentRealBalance;
+
+  // Nominal penarikan tahunan & bulanan yang dihitung dari persentase penarikan
+  const annualWithdrawal = Math.round(activePrincipal * (withdrawalPercent / 100));
+  const monthlyWithdrawal = Math.round(annualWithdrawal / 12);
+  const remainingPercent = Math.max(0, compoundReturn - withdrawalPercent);
+  const remainingAnnualNominal = Math.round(activePrincipal * (remainingPercent / 100));
 
   // Selisih uang yang perlu dikumpulkan
   const gap = Math.max(0, simulatedFund - currentRealBalance);
@@ -62,7 +93,7 @@ export const SimulatorBSustainabilityModal: React.FC<SimulatorBSustainabilityMod
 
   // Kalkulasi Trayektori Ketahanan 50 Tahun ke Depan
   const simulation = useMemo(() => {
-    const rate = annualReturn / 100;
+    const rate = compoundReturn / 100;
     const annualGain = activePrincipal * rate;
     let balance = activePrincipal;
     const history: Array<{ year: number; balance: number }> = [{ year: 0, balance: activePrincipal }];
@@ -115,7 +146,7 @@ export const SimulatorBSustainabilityModal: React.FC<SimulatorBSustainabilityMod
       statusLabel,
       statusDetail,
     };
-  }, [activePrincipal, annualReturn, annualWithdrawal]);
+  }, [activePrincipal, compoundReturn, annualWithdrawal]);
 
   // SVG Chart Geometry
   const chartWidth = 320;
@@ -344,59 +375,73 @@ export const SimulatorBSustainabilityModal: React.FC<SimulatorBSustainabilityMod
             </div>
           </div>
 
-          {/* Slider 1: Asumsi Return Per Tahun (3% - 12%, default 7%) */}
-          <div className="bg-surface p-4 rounded-card-lg border border-border space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-[12px] font-semibold text-text">
-                Asumsi Return Tahunan
-              </label>
-              <span className="text-[14px] font-bold text-primary">
-                {annualReturn.toFixed(1)}% / thn
-              </span>
+          {/* Kontrol Persentase Penarikan Dana Abadi (Menggantikan Slider Asumsi Return) */}
+          <div className="bg-surface p-4 rounded-card-lg border border-border space-y-3">
+            <div className="flex items-start justify-between">
+              <div>
+                <label className="text-[13px] font-bold text-text block">
+                  Persentase Penarikan Dana Abadi
+                </label>
+                <span className="text-[11px] text-text-secondary block mt-0.5">
+                  Asumsi return investasi: <strong className="text-primary">{compoundReturn}%/thn</strong> (dari Simulator Bunga Majemuk)
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-[18px] font-bold text-primary block leading-tight">
+                  {withdrawalPercent.toFixed(1)}%
+                </span>
+                <span className="text-[10px] text-text-secondary font-medium">
+                  per tahun
+                </span>
+              </div>
             </div>
-            <input
-              type="range"
-              min={3}
-              max={12}
-              step={0.5}
-              value={annualReturn}
-              onChange={(e) => setAnnualReturn(Number(e.target.value))}
-              className="w-full accent-primary h-2 bg-field rounded-lg cursor-pointer"
-            />
-            <div className="flex justify-between text-[10px] text-text-secondary">
-              <span>3% (Obligasi/SBN)</span>
-              <span>7% (Campuran/Reksadana)</span>
-              <span>12% (Saham)</span>
-            </div>
-          </div>
 
-          {/* Slider 2: Estimasi Penarikan Per Tahun (Prefill dari total pengeluaran 12 bulan terakhir) */}
-          <div className="bg-surface p-4 rounded-card-lg border border-border space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-[12px] font-semibold text-text">
-                Estimasi Penarikan Tahunan
-              </label>
-              <span className="text-[14px] font-bold text-expense">
-                {formatCurrency(annualWithdrawal)} / thn
-              </span>
-            </div>
+            {/* Slider Persentase Penarikan */}
             <input
               type="range"
-              min={5000000}
-              max={200000000}
-              step={1000000}
-              value={annualWithdrawal}
-              onChange={(e) => setAnnualWithdrawal(Number(e.target.value))}
+              min={1}
+              max={Math.max(15, compoundReturn + 5)}
+              step={0.5}
+              value={withdrawalPercent}
+              onChange={(e) => setWithdrawalPercent(Number(e.target.value))}
               className="w-full accent-primary h-2 bg-field rounded-lg cursor-pointer"
             />
+
             <div className="flex justify-between text-[10px] text-text-secondary">
-              <span>Rp5 Jt</span>
-              <span>Rp100 Jt</span>
-              <span>Rp200 Jt</span>
+              <span>1% (Minimal)</span>
+              <span className="font-bold text-income">
+                {Math.max(1, compoundReturn - 4)}% (Default: sisakan 4%)
+              </span>
+              <span>{Math.max(15, compoundReturn + 5)}%</span>
             </div>
-            <p className="text-[10px] text-text-secondary italic">
-              *Di-prefill dari total pengeluaran Anda dalam 12 bulan terakhir (semua kategori).
-            </p>
+
+            {/* Box Nominal Penarikan Rupiah */}
+            <div className="p-3 bg-field rounded-control border border-border/70 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] font-medium text-text-secondary">
+                  Nominal Penarikan per Tahun:
+                </span>
+                <span className="text-[15px] font-bold text-expense">
+                  {formatCurrency(annualWithdrawal)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pt-1 border-t border-border/50">
+                <span className="text-[11px] font-medium text-text-secondary">
+                  Estimasi Penarikan per Bulan:
+                </span>
+                <span className="text-[13px] font-bold text-text">
+                  {formatCurrency(monthlyWithdrawal)} / bln
+                </span>
+              </div>
+              <div className="flex items-center justify-between pt-1 border-t border-border/50 text-[10.5px]">
+                <span className="text-income font-medium">
+                  Sisakan {remainingPercent}% untuk inflasi & pertumbuhan pokok:
+                </span>
+                <span className="font-semibold text-income">
+                  +{formatCurrency(remainingAnnualNominal)} / thn
+                </span>
+              </div>
+            </div>
           </div>
 
           {/* Disclaimer Permanen Wajib per PRD §3.4 */}
