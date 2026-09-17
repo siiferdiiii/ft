@@ -74,7 +74,7 @@ export const SimulatorACompoundModal: React.FC<SimulatorACompoundModalProps> = (
 
   // Handler simpan simulasi
   const handleSaveSimulation = () => {
-    const amountToSave = projectionData[25]?.invested || final25.invested;
+    const amountToSave = final25.invested;
     if (typeof window !== "undefined") {
       localStorage.setItem("ft_saved_simulated_investment", amountToSave.toString());
       localStorage.setItem("ft_saved_sim_monthly", monthlyAmount.toString());
@@ -337,7 +337,7 @@ export const SimulatorACompoundModal: React.FC<SimulatorACompoundModalProps> = (
               <>
                 <span>Simpan Simulasi</span>
                 <span className="text-[12px] font-normal opacity-90">
-                  ({formatCurrency(projectionData[25]?.invested || final25.invested)})
+                  ({formatCurrency(final25.invested)})
                 </span>
               </>
             )}
