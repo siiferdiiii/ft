@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { budgetInterviewSchema } from "@/lib/validators";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { callGeminiWithFailover, getGeminiApiKeys } from "@/lib/gemini";
+import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 
 // Endpoint POST: terima riwayat percakapan multi-turn, kirim ke Gemini, return balasan AI.
 // State percakapan tidak disimpan ke DB - hanya ada di client session (sesuai PRD §2.2).
@@ -11,6 +12,16 @@ export async function POST(req: NextRequest): Promise<Response> {
   try {
     const user = await getCurrentUser();
     if (!user) return apiError("UNAUTHORIZED", "Silakan login terlebih dahulu", 401);
+
+    const clientIp = getClientIp(req);
+    const rateLimit = checkRateLimit(`ai:${user.id}:${clientIp}`, 15, 60 * 1000);
+    if (!rateLimit.success) {
+      return apiError(
+        "TOO_MANY_REQUESTS",
+        "Terlalu banyak permintaan ke asisten AI. Silakan tunggu 1 menit sebelum mengirim pesan lagi.",
+        429
+      );
+    }
 
     const body = await req.json();
     const parsed = budgetInterviewSchema.safeParse(body);
@@ -136,7 +147,7 @@ ATURAN PENTING:
       }
       return apiError(
         "AI_ERROR",
-        `Terjadi gangguan saat menghubungi asisten AI (${geminiStatus}): ${errorDetail || "Tidak ada respons"}`,
+        "Terjadi gangguan saat menghubungi asisten AI. Silakan coba sesaat lagi.",
         502
       );
     }

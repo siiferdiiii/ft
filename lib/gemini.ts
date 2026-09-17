@@ -80,7 +80,7 @@ export async function callGeminiWithFailover(
       if (!res.ok) {
         const errText = await res.text().catch(() => "");
         lastStatus = res.status;
-        errors.push(`Key #${i + 1} (${maskedKey}): HTTP ${res.status} - ${errText.slice(0, 150)}`);
+        errors.push(`Key #${i + 1}: HTTP ${res.status}`);
 
         console.warn(
           `[Gemini Rotation] Key #${i + 1} (${maskedKey}) gagal dengan status ${res.status}:`,

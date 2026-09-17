@@ -1,17 +1,17 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { BottomNav } from "@/components/ui/BottomNav";
 import { useAppData } from "@/lib/context/AppDataContext";
 import { formatCurrency } from "@/lib/currency";
-import { InfinityIcon, TrendingUpIcon, ShieldIcon, PlusIcon } from "@/components/ui/Icons";
+import { InfinityIcon, TrendingUpIcon, ShieldIcon } from "@/components/ui/Icons";
 import { SimulatorACompoundModal } from "@/components/features/SimulatorACompoundModal";
 import { SimulatorBSustainabilityModal } from "@/components/features/SimulatorBSustainabilityModal";
 import { DanaAbadiStatsDto } from "@/lib/types";
 
 export default function DanaAbadiPage() {
-  const { wallets, refreshData } = useAppData();
+  const { wallets } = useAppData();
 
   const [stats, setStats] = useState<DanaAbadiStatsDto | null>(null);
   const [allocationPercent, setAllocationPercent] = useState<number>(10);

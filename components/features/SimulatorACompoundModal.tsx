@@ -3,7 +3,8 @@
 import React, { useState, useMemo } from "react";
 import { BottomSheet } from "../ui/BottomSheet";
 import { formatCurrency } from "@/lib/currency";
-import { TrendingUpIcon, InfinityIcon } from "../ui/Icons";
+import { TrendingUpIcon } from "../ui/Icons";
+import { calculateCompoundProjection } from "@/lib/financeMath";
 
 interface SimulatorACompoundModalProps {
   isOpen: boolean;
@@ -44,33 +45,7 @@ export const SimulatorACompoundModal: React.FC<SimulatorACompoundModalProps> = (
 
   // Kalkulasi proyeksi 25 tahun
   const projectionData = useMemo(() => {
-    const years = 25;
-    const monthlyRate = annualReturn / 100 / 12;
-    const data: Array<{
-      year: number;
-      savedOnly: number;
-      invested: number;
-    }> = [];
-
-    for (let y = 0; y <= years; y++) {
-      const months = y * 12;
-      const savedOnly = months * monthlyAmount;
-      let invested = savedOnly;
-
-      if (monthlyRate > 0 && months > 0) {
-        invested = Math.round(
-          monthlyAmount * ((Math.pow(1 + monthlyRate, months) - 1) / monthlyRate)
-        );
-      }
-
-      data.push({
-        year: y,
-        savedOnly,
-        invested,
-      });
-    }
-
-    return data;
+    return calculateCompoundProjection(monthlyAmount, annualReturn, 25);
   }, [monthlyAmount, annualReturn]);
 
   const final25 = projectionData[selectedYear] || projectionData[25];

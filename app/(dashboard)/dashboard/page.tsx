@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { WalletCard } from "@/components/features/WalletCard";
@@ -13,6 +13,7 @@ import { ReceiptScannerModal } from "@/components/features/ReceiptScannerModal";
 import { DanaAbadiSuggestBanner, IncomeAllocationSuggestion } from "@/components/features/DanaAbadiSuggestBanner";
 import { SimulatorACompoundModal } from "@/components/features/SimulatorACompoundModal";
 import { BalanceGrowthChart } from "@/components/features/BalanceGrowthChart";
+import { TransactionRow } from "@/components/features/TransactionRow";
 import { BottomNav } from "@/components/ui/BottomNav";
 import { CameraIcon, PlusIcon } from "@/components/ui/Icons";
 import { TransactionType, InputSource, BalanceGrowthDto } from "@/lib/types";
@@ -411,36 +412,7 @@ export default function DashboardPage() {
 
         <div className="bg-surface rounded-card-lg border border-border divide-y divide-border overflow-hidden">
           {recentTransactions.slice(0, 5).map((tx) => (
-            <div
-              key={tx.id}
-              className="flex items-center justify-between p-3.5 hover:bg-field/50 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                {/* Ikon kategori = dot bulat fill chip per DESIGN_SYSTEM §6 */}
-                <div className="w-8 h-8 rounded-full bg-chip flex items-center justify-center text-primary font-bold text-xs">
-                  {tx.categoryName ? tx.categoryName.charAt(0) : "•"}
-                </div>
-                <div>
-                  <div className="text-[13px] font-semibold text-text truncate max-w-[170px]">
-                    {tx.note || tx.categoryName || "Transaksi"}
-                  </div>
-                  <div className="text-[11px] text-text-secondary flex items-center gap-1.5">
-                    <span>{tx.walletName || "Dompet"}</span>
-                    <span>•</span>
-                    <span>{new Date(tx.transactionDate).toLocaleDateString("id-ID")}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Nominal di kanan warna income/expense */}
-              <div
-                className={`text-[14px] font-bold ${tx.type === "INCOME" ? "text-income" : "text-expense"
-                  }`}
-              >
-                {tx.type === "INCOME" ? "+" : "-"}
-                {formatCurrency(tx.amount)}
-              </div>
-            </div>
+            <TransactionRow key={tx.id} transaction={tx} />
           ))}
 
           {recentTransactions.length === 0 && !isLoading && (

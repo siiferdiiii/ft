@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { categorySchema } from "@/lib/validators";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { CategoryDto } from "@/lib/types";
+import { calculateBudgetStatus } from "@/lib/budgetStatus";
 
 export async function GET() {
   try {
@@ -41,25 +42,10 @@ export async function GET() {
         0
       );
 
-      let remainingPercent: number | null = null;
-      let statusColor: CategoryDto["statusColor"] = "neutral";
-
-      if (budgetLimitNum && budgetLimitNum > 0) {
-        remainingPercent = Math.max(
-          0,
-          ((budgetLimitNum - currentExpense) / budgetLimitNum) * 100
-        );
-
-        if (remainingPercent > 80) {
-          statusColor = "green";
-        } else if (remainingPercent > 50) {
-          statusColor = "yellow";
-        } else if (remainingPercent > 20) {
-          statusColor = "orange";
-        } else {
-          statusColor = "red";
-        }
-      }
+      const { remainingPercent, statusColor } = calculateBudgetStatus(
+        budgetLimitNum,
+        currentExpense
+      );
 
       return {
         id: cat.id,

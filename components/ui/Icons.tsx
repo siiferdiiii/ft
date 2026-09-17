@@ -71,23 +71,6 @@ export const CloseIcon: React.FC<IconProps> = ({ className = "w-5 h-5", size }) 
   </svg>
 );
 
-export const CheckIcon: React.FC<IconProps> = ({ className = "w-5 h-5", size }) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="currentColor"
-    className={className}
-    aria-hidden="true"
-  >
-    <path
-      fillRule="evenodd"
-      clipRule="evenodd"
-      d="M20.28 6.22a1.5 1.5 0 0 1 0 2.12l-10 10a1.5 1.5 0 0 1-2.12 0l-5-5a1.5 1.5 0 1 1 2.12-2.12L9.22 15.17l8.94-8.95a1.5 1.5 0 0 1 2.12 0z"
-    />
-  </svg>
-);
-
 export const WalletIcon: React.FC<IconProps> = ({ className = "w-5 h-5", size }) => (
   <svg
     width={size}
@@ -170,24 +153,6 @@ export const CategoryIcon: React.FC<IconProps> = ({ className = "w-5 h-5", size 
       fillRule="evenodd"
       clipRule="evenodd"
       d="M3 4.5A1.5 1.5 0 0 1 4.5 3h6a1.5 1.5 0 0 1 1.06.44l8 8a1.5 1.5 0 0 1 0 2.12l-6 6a1.5 1.5 0 0 1-2.12 0l-8-8A1.5 1.5 0 0 1 3 10.5v-6zm4.5 4a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"
-    />
-  </svg>
-);
-
-export const CalendarIcon: React.FC<IconProps> = ({ className = "w-5 h-5", size }) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="currentColor"
-    className={className}
-    aria-hidden="true"
-  >
-    <path d="M4 4h16a2 2 0 0 1 2 2v2H2V6a2 2 0 0 1 2-2z" />
-    <path
-      fillRule="evenodd"
-      clipRule="evenodd"
-      d="M2 10v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V10H2zm6 3h2v2H8v-2zm6 0h2v2h-2v-2zm-6 4h2v2H8v-2zm6 0h2v2h-2v-2z"
     />
   </svg>
 );

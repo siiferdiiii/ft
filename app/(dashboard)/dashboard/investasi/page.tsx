@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import Link from "next/link";
 import { BottomNav } from "@/components/ui/BottomNav";
 import { AFFILIATE_PARTNERS } from "@/lib/constants/affiliates";

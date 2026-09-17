@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { BottomSheet } from "../ui/BottomSheet";
 import { formatCurrency } from "@/lib/currency";
-import { InfinityIcon, ShieldIcon, TrendingUpIcon } from "../ui/Icons";
+import { InfinityIcon, TrendingUpIcon } from "../ui/Icons";
+import { calculateSustainabilitySimulation } from "@/lib/financeMath";
 
 interface SimulatorBSustainabilityModalProps {
   isOpen: boolean;
@@ -18,8 +19,8 @@ export const SimulatorBSustainabilityModal: React.FC<SimulatorBSustainabilityMod
   isOpen,
   onClose,
   initialRealBalance,
-  initialMonthlySavings = 300000,
-  initialAnnualExpense = 36000000,
+  initialMonthlySavings: _initialMonthlySavings = 300000,
+  initialAnnualExpense: _initialAnnualExpense = 36000000,
   savedSimulatedAmount,
 }) => {
   const currentRealBalance = Math.max(0, initialRealBalance || 0);
@@ -93,59 +94,12 @@ export const SimulatorBSustainabilityModal: React.FC<SimulatorBSustainabilityMod
 
   // Kalkulasi Trayektori Ketahanan 50 Tahun ke Depan
   const simulation = useMemo(() => {
-    const rate = compoundReturn / 100;
-    const annualGain = activePrincipal * rate;
-    let balance = activePrincipal;
-    const history: Array<{ year: number; balance: number }> = [{ year: 0, balance: activePrincipal }];
-    let depletedYear: number | null = null;
-
-    for (let y = 1; y <= 50; y++) {
-      if (balance <= 0) {
-        if (depletedYear === null) depletedYear = y - 1;
-        balance = 0;
-      } else {
-        const gain = balance * rate;
-        balance = balance + gain - annualWithdrawal;
-        if (balance <= 0) {
-          if (depletedYear === null) depletedYear = y;
-          balance = 0;
-        }
-      }
-      history.push({ year: y, balance: Math.max(0, Math.round(balance)) });
-    }
-
-    // Penentuan Badge Status 3 Kondisi Warna per PRD §3.4 & §3.4.1:
-    let status: "green" | "yellow" | "red";
-    let statusLabel: string;
-    let statusDetail: string;
-
-    if (activePrincipal <= 0) {
-      status = "red";
-      statusLabel = "Pokok Dana Rp0";
-      statusDetail = "Tingkatkan alokasi bulanan untuk membangun pokok dana abadi yang cukup.";
-    } else if (annualWithdrawal <= 0.7 * annualGain) {
-      status = "green";
-      statusLabel = "Bertahan Selamanya, Margin Aman";
-      statusDetail = `Penarikan tahunan (${formatCurrency(annualWithdrawal)}) ≤ 70% dari return tahunan (${formatCurrency(annualGain)}). Pokok dana abadi tetap utuh dan terus bertumbuh melampaui inflasi.`;
-    } else if (annualWithdrawal <= 1.0 * annualGain) {
-      status = "yellow";
-      statusLabel = "Bertahan, Tapi Margin Tipis";
-      statusDetail = `Penarikan tahunan (${formatCurrency(annualWithdrawal)}) berada di antara 70%–100% dari return tahunan (${formatCurrency(annualGain)}). Bertahan selama return pasar stabil, namun rentan tergerus jika return riil turun.`;
-    } else {
-      status = "red";
-      const yearText = depletedYear ? `${depletedYear} tahun` : "kurang dari 1 tahun";
-      statusLabel = `Akan habis dalam ${yearText}`;
-      statusDetail = `Penarikan tahunan (${formatCurrency(annualWithdrawal)}) melebihi return tahunan (${formatCurrency(annualGain)}). Pokok dana akan tergerus habis seiring waktu.`;
-    }
-
-    return {
-      history,
-      annualGain,
-      depletedYear,
-      status,
-      statusLabel,
-      statusDetail,
-    };
+    return calculateSustainabilitySimulation(
+      activePrincipal,
+      compoundReturn,
+      annualWithdrawal,
+      formatCurrency
+    );
   }, [activePrincipal, compoundReturn, annualWithdrawal]);
 
   // SVG Chart Geometry

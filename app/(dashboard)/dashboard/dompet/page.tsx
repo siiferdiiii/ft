@@ -1,15 +1,14 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { BottomNav } from "@/components/ui/BottomNav";
-import { BottomSheet } from "@/components/ui/BottomSheet";
-import { Button } from "@/components/ui/Button";
 import { TransferModal } from "@/components/features/TransferModal";
+import { WalletFormModal } from "@/components/features/WalletFormModal";
 import { PlusIcon, TransferIcon, TrashIcon, EditIcon, WalletIcon, InfinityIcon, TrendingUpIcon } from "@/components/ui/Icons";
 import { SimulatorACompoundModal } from "@/components/features/SimulatorACompoundModal";
 import { WalletDto, WalletType } from "@/lib/types";
-import { formatCurrency, formatCurrencyInput, parseCurrencyInput } from "@/lib/currency";
+import { formatCurrency } from "@/lib/currency";
 import { useAppData } from "@/lib/context/AppDataContext";
 
 export default function WalletsPage() {
@@ -26,14 +25,6 @@ export default function WalletsPage() {
   const [isSimAOpen, setIsSimAOpen] = useState(false);
   const [editingWallet, setEditingWallet] = useState<WalletDto | null>(null);
 
-  // Form state
-  const [name, setName] = useState("");
-  const [type, setType] = useState<WalletType>("CASH");
-  const [initialBalance, setInitialBalance] = useState("");
-  const [isPerpetualFund, setIsPerpetualFund] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
   const loadWallets = () => refreshData(true);
 
   // Total saldo Dana Abadi saat ini
@@ -43,91 +34,65 @@ export default function WalletsPage() {
 
   const handleOpenCreate = () => {
     setEditingWallet(null);
-    setName("");
-    setType("CASH");
-    setInitialBalance("");
-    setIsPerpetualFund(false);
-    setErrorMessage(null);
     setIsCreateModalOpen(true);
   };
 
   const handleOpenEdit = (w: WalletDto) => {
     setEditingWallet(w);
-    setName(w.name);
-    setType(w.type);
-    setInitialBalance("");
-    setIsPerpetualFund(Boolean(w.isPerpetualFund));
-    setErrorMessage(null);
     setIsCreateModalOpen(true);
   };
 
-  const handleSaveWallet = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage(null);
-
-    if (!name.trim()) {
-      setErrorMessage("Nama dompet wajib diisi");
-      return;
+  const handleSaveWallet = async (data: {
+    name: string;
+    type: WalletType;
+    initialBalance?: number;
+    isPerpetualFund: boolean;
+    editingId?: string;
+  }) => {
+    if (data.editingId) {
+      // Edit dompet
+      const res = await fetch(`/api/wallets/${data.editingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: data.name,
+          type: data.type,
+          isPerpetualFund: data.isPerpetualFund,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        return { success: false, error: json.error?.message || "Gagal memperbarui dompet" };
+      }
+      mutateWallets((prev) =>
+        prev.map((w) =>
+          w.id === data.editingId
+            ? { ...w, name: data.name, type: data.type, isPerpetualFund: data.isPerpetualFund }
+            : w
+        )
+      );
+    } else {
+      const res = await fetch("/api/wallets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: data.name,
+          type: data.type,
+          initialBalance: data.initialBalance,
+          isPerpetualFund: data.isPerpetualFund,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        return { success: false, error: json.error?.message || "Gagal membuat dompet" };
+      }
+      if (json.data) {
+        mutateWallets((prev) => [...prev, json.data]);
+      }
     }
 
-    const wasPerpetual = editingWallet ? Boolean(editingWallet.isPerpetualFund) : false;
-    const willBePerpetual = isPerpetualFund;
-
-    setIsSaving(true);
-    try {
-      if (editingWallet) {
-        // Edit dompet
-        const res = await fetch(`/api/wallets/${editingWallet.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: name.trim(), type, isPerpetualFund: willBePerpetual }),
-        });
-        const json = await res.json();
-        if (!res.ok || json.error) {
-          setErrorMessage(json.error?.message || "Gagal memperbarui dompet");
-          return;
-        }
-        mutateWallets((prev) =>
-          prev.map((w) =>
-            w.id === editingWallet.id
-              ? { ...w, name: name.trim(), type, isPerpetualFund: willBePerpetual }
-              : w
-          )
-        );
-      } else {
-        const bal = parseCurrencyInput(initialBalance);
-        const res = await fetch("/api/wallets", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: name.trim(),
-            type,
-            initialBalance: bal,
-            isPerpetualFund: willBePerpetual,
-          }),
-        });
-        const json = await res.json();
-        if (!res.ok || json.error) {
-          setErrorMessage(json.error?.message || "Gagal membuat dompet");
-          return;
-        }
-        if (json.data) {
-          mutateWallets((prev) => [...prev, json.data]);
-        }
-      }
-
-      refreshData(true);
-      setIsCreateModalOpen(false);
-
-      // Trigger Simulator A saat pertama kali mengaktifkan flag Dana Abadi per PRD §3.3
-      if (!wasPerpetual && willBePerpetual) {
-        setIsSimAOpen(true);
-      }
-    } catch {
-      setErrorMessage("Terjadi kesalahan koneksi saat menyimpan dompet");
-    } finally {
-      setIsSaving(false);
-    }
+    refreshData(true);
+    return { success: true };
   };
 
   const handleDeleteWallet = async (walletId: string) => {
@@ -293,95 +258,13 @@ export default function WalletsPage() {
       </div>
 
       {/* Modal Tambah / Edit Dompet */}
-      <BottomSheet
+      <WalletFormModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
-        title={editingWallet ? "Edit Dompet" : "Tambah Dompet Baru"}
-      >
-        <form onSubmit={handleSaveWallet} className="flex flex-col flex-1 min-h-0 relative">
-          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 pb-28">
-            {errorMessage && (
-              <div className="p-3 bg-expense/10 text-expense text-[13px] font-medium rounded-control">
-                {errorMessage}
-              </div>
-            )}
-
-            <div>
-              <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
-                Nama Dompet
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Contoh: Cash Harian, BCA, GoPay"
-                required
-                className="w-full bg-field text-text text-[14px] font-medium px-4 py-3 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
-                Tipe Dompet
-              </label>
-              <select
-                value={type}
-                onChange={(e) => setType(e.target.value as WalletType)}
-                className="w-full bg-field text-text text-[14px] font-medium px-4 py-3 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none"
-              >
-                <option value="CASH">Tunai (Cash)</option>
-                <option value="EWALLET">E-Wallet (GoPay, OVO, ShopeePay)</option>
-                <option value="BANK">Rekening Bank</option>
-                <option value="OTHER">Lainnya</option>
-              </select>
-            </div>
-
-            {!editingWallet && (
-              <div>
-                <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
-                  Saldo Awal (Rp)
-                </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={initialBalance}
-                  onChange={(e) => setInitialBalance(formatCurrencyInput(e.target.value))}
-                  placeholder="Rp 0"
-                  className="w-full bg-field text-text text-[20px] font-bold px-4 py-3 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none"
-                />
-              </div>
-            )}
-
-            {/* Toggle Jadikan Dana Abadi per PRD §3.1 */}
-            <div className="p-3.5 bg-field rounded-control border border-border flex items-center justify-between">
-              <div className="pr-3">
-                <span className="text-[13px] font-bold text-text flex items-center gap-1.5">
-                  <InfinityIcon className="w-4 h-4 text-primary" />
-                  Jadikan Dana Abadi
-                </span>
-                <span className="text-[11px] text-text-secondary block mt-0.5 leading-snug">
-                  Menerima alokasi pemasukan & dilindungi friksi sadar saat pengeluaran.
-                </span>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                <input
-                  type="checkbox"
-                  checked={isPerpetualFund}
-                  onChange={(e) => setIsPerpetualFund(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-border peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary" />
-              </label>
-            </div>
-          </div>
-
-          <div className="absolute bottom-0 left-0 right-0 p-4 bg-surface/95 backdrop-blur-md border-t border-border z-30 shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
-            <Button type="submit" variant="primary" fullWidth isLoading={isSaving}>
-              {editingWallet ? "Simpan Perubahan" : "Buat Dompet"}
-            </Button>
-          </div>
-        </form>
-      </BottomSheet>
+        editingWallet={editingWallet}
+        onSave={handleSaveWallet}
+        onPerpetualActivated={() => setIsSimAOpen(true)}
+      />
 
       {/* Modal Transfer Antar Dompet */}
       <TransferModal

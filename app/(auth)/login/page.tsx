@@ -45,7 +45,8 @@ export default function LoginPage() {
     const markLoggedIn = () => {
       if (typeof window !== "undefined") {
         localStorage.setItem("ft_logged_in", "true");
-        document.cookie = "ft_logged_in=true; path=/; max-age=31536000; SameSite=Lax";
+        const isSecure = window.location.protocol === "https:";
+        document.cookie = `ft_logged_in=true; path=/; max-age=31536000; SameSite=Lax${isSecure ? "; Secure" : ""}`;
       }
     };
 

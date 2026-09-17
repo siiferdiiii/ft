@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/Button";
-import { formatCurrency, formatCurrencyInput, parseCurrencyInput } from "@/lib/currency";
+import { formatCurrencyInput, parseCurrencyInput } from "@/lib/currency";
 import { CategoryDto } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────

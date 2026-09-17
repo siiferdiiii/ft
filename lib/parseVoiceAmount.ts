@@ -73,9 +73,6 @@ export const INCOME_DICTIONARY: Record<string, string[]> = {
   ],
 };
 
-// Gabungan semua kata kunci pemasukan
-const ALL_INCOME_WORDS = Object.values(INCOME_DICTIONARY).flat();
-
 const WORD_TO_NUMBER: Record<string, number> = {
   nol: 0,
   satu: 1,

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { BottomNav } from "@/components/ui/BottomNav";
 import { BottomSheet } from "@/components/ui/BottomSheet";
@@ -29,8 +29,6 @@ export default function CategoriesPage() {
   const [budgetLimit, setBudgetLimit] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const loadCategories = () => refreshData(true);
 
   const handleOpenCreate = () => {
     setEditingCategory(null);

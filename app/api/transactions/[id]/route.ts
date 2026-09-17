@@ -38,6 +38,26 @@ export async function PATCH(
     const newAmount = parsed.data.amount !== undefined ? parsed.data.amount : oldAmount;
     const newWalletId = parsed.data.walletId || existing.walletId;
 
+    // Verifikasi kepemilikan dompet jika diubah (cegah manipulasi saldo dompet user lain / IDOR)
+    if (parsed.data.walletId && parsed.data.walletId !== existing.walletId) {
+      const ownedWallet = await prisma.wallet.findFirst({
+        where: { id: parsed.data.walletId, userId: user.id },
+      });
+      if (!ownedWallet) {
+        return apiError("FORBIDDEN", "Dompet tujuan tidak ditemukan atau bukan milik Anda", 403);
+      }
+    }
+
+    // Verifikasi kepemilikan kategori jika ditentukan (cegah IDOR)
+    if (parsed.data.categoryId) {
+      const ownedCategory = await prisma.category.findFirst({
+        where: { id: parsed.data.categoryId, userId: user.id },
+      });
+      if (!ownedCategory) {
+        return apiError("FORBIDDEN", "Kategori tidak ditemukan atau bukan milik Anda", 403);
+      }
+    }
+
     const oldEffect = oldType === "INCOME" ? oldAmount : -oldAmount;
     const newEffect = newType === "INCOME" ? newAmount : -newAmount;
 

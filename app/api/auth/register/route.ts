@@ -5,9 +5,20 @@ import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { prisma } from "@/lib/prisma";
 import { ensureUserAndDefaults } from "@/lib/auth";
+import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 
 export async function POST(req: NextRequest) {
   try {
+    const clientIp = getClientIp(req);
+    const rateLimit = checkRateLimit(`register:${clientIp}`, 5, 10 * 60 * 1000);
+    if (!rateLimit.success) {
+      return apiError(
+        "TOO_MANY_REQUESTS",
+        "Terlalu banyak percobaan pendaftaran dari perangkat ini. Silakan coba kembali setelah beberapa menit.",
+        429
+      );
+    }
+
     const body = await req.json();
     const parsed = authSchema.safeParse(body);
 

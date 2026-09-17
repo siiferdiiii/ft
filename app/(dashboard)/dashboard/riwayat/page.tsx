@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAppData } from "@/lib/context/AppDataContext";
 import { TransactionDto } from "@/lib/types";
 import { formatCurrency } from "@/lib/currency";
 import { BottomNav } from "@/components/ui/BottomNav";
 import { SwipeDeleteRow } from "@/components/ui/SwipeDeleteRow";
+import { TransactionRow } from "@/components/features/TransactionRow";
 import Link from "next/link";
 
 export default function RiwayatPage() {
@@ -287,38 +288,7 @@ export default function RiwayatPage() {
                   onDelete={() => handleDeleteTransaction(tx.id)}
                   isDeleting={deletingId === tx.id}
                 >
-                  <div className="flex items-center justify-between p-3.5">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
-                        tx.type === "INCOME" ? "bg-income/15 text-income" : "bg-expense/15 text-expense"
-                      }`}>
-                        {tx.categoryName ? tx.categoryName.charAt(0) : "•"}
-                      </div>
-                      <div>
-                        <div className="text-[13px] font-semibold text-text truncate max-w-[180px]">
-                          {tx.note || tx.categoryName || "Transaksi"}
-                        </div>
-                        <div className="text-[11px] text-text-secondary flex items-center gap-1.5">
-                          <span>{tx.walletName || "Dompet"}</span>
-                          {tx.categoryName && (
-                            <>
-                              <span>•</span>
-                              <span>{tx.categoryName}</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div
-                      className={`text-[14px] font-bold whitespace-nowrap ${
-                        tx.type === "INCOME" ? "text-income" : "text-expense"
-                      }`}
-                    >
-                      {tx.type === "INCOME" ? "+" : "-"}
-                      {formatCurrency(tx.amount)}
-                    </div>
-                  </div>
+                  <TransactionRow transaction={tx} showDate={false} />
                 </SwipeDeleteRow>
               ))}
             </div>

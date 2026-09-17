@@ -90,36 +90,45 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       );
 
       // Hanya hubungi Supabase jika memang ada session cookie
-      if (hasAuthCookie) {
-        const supabase = await createClient();
-        const {
-          data: { user },
-          error,
-        } = await supabase.auth.getUser();
-
-        if (user && !error) {
-          const email = user.email || `${user.id}@user.local`;
-          await ensureUserAndDefaults(user.id, email, user.user_metadata?.name);
-          return {
-            id: user.id,
-            email,
-            name: user.user_metadata?.name || null,
-          };
-        }
+      if (!hasAuthCookie) {
+        return null;
       }
+
+      const supabase = await createClient();
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
+
+      if (user && !error) {
+        const email = user.email || `${user.id}@user.local`;
+        await ensureUserAndDefaults(user.id, email, user.user_metadata?.name);
+        return {
+          id: user.id,
+          email,
+          name: user.user_metadata?.name || null,
+        };
+      }
+
+      return null;
     } catch (err) {
-      console.warn("Supabase getCurrentUser error, falling back:", err);
+      console.warn("Supabase getCurrentUser error:", err);
+      return null;
     }
   }
 
-  // Fallback demo user instan (0ms) untuk offline/development/unconfigured mode
-  const fallbackId = "demo-user-123";
-  const fallbackEmail = "demo@financetracker.local";
-  await ensureUserAndDefaults(fallbackId, fallbackEmail, "Demo User");
+  // Fallback demo user HANYA untuk offline local development saat Supabase belum dikonfigurasi
+  if (process.env.NODE_ENV !== "production") {
+    const fallbackId = "demo-user-123";
+    const fallbackEmail = "demo@financetracker.local";
+    await ensureUserAndDefaults(fallbackId, fallbackEmail, "Demo User");
 
-  return {
-    id: fallbackId,
-    email: fallbackEmail,
-    name: "Demo User",
-  };
+    return {
+      id: fallbackId,
+      email: fallbackEmail,
+      name: "Demo User",
+    };
+  }
+
+  return null;
 }

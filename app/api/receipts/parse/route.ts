@@ -1,14 +1,39 @@
 import { NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 
 const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+
+function isValidImageMagicBytes(buffer: Buffer): boolean {
+  if (buffer.length < 12) return false;
+  // JPEG: FF D8 FF
+  const isJpeg = buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  // PNG: 89 50 4E 47
+  const isPng = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47;
+  // WebP: RIFF .... WEBP
+  const isWebp =
+    buffer.toString("ascii", 0, 4) === "RIFF" &&
+    buffer.toString("ascii", 8, 12) === "WEBP";
+
+  return isJpeg || isPng || isWebp;
+}
 
 export async function POST(req: NextRequest) {
   try {
     const user = await getCurrentUser();
     if (!user) return apiError("UNAUTHORIZED", "Silakan login terlebih dahulu", 401);
+
+    const clientIp = getClientIp(req);
+    const rateLimit = checkRateLimit(`ocr:${user.id}:${clientIp}`, 10, 60 * 1000);
+    if (!rateLimit.success) {
+      return apiError(
+        "TOO_MANY_REQUESTS",
+        "Terlalu banyak permintaan scan resi. Silakan tunggu 1 menit.",
+        429
+      );
+    }
 
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
@@ -32,6 +57,15 @@ export async function POST(req: NextRequest) {
 
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+
+    // Validasi Magic Bytes (verifikasi integritas file gambar sesungguhnya)
+    if (!isValidImageMagicBytes(buffer)) {
+      return apiError(
+        "INVALID_FILE_TYPE",
+        "File yang diunggah bukan format gambar valid (JPEG, PNG, atau WebP)",
+        400
+      );
+    }
 
     let extractedAmount: number | null = null;
     let extractedMerchant: string | null = null;

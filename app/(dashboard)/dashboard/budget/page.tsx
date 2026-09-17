@@ -3,14 +3,14 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { BottomNav } from "@/components/ui/BottomNav";
-import { BottomSheet } from "@/components/ui/BottomSheet";
-import { Button } from "@/components/ui/Button";
 import { EditIcon, CategoryIcon } from "@/components/ui/Icons";
 import { CategoryDto } from "@/lib/types";
-import { formatCurrency, formatCurrencyInput, parseCurrencyInput } from "@/lib/currency";
+import { formatCurrency } from "@/lib/currency";
 import { useAppData } from "@/lib/context/AppDataContext";
 import { BudgetInterviewModal } from "@/components/features/BudgetInterviewModal";
 import { BudgetInterviewBanner } from "@/components/features/BudgetInterviewBanner";
+import { CategoryBudgetEditModal } from "@/components/features/CategoryBudgetEditModal";
+import { getBudgetStatusBadgeClass } from "@/lib/budgetStatus";
 
 export default function BudgetPage() {
   const {
@@ -31,9 +31,6 @@ export default function BudgetPage() {
 
   // Edit budget modal state
   const [selectedCategory, setSelectedCategory] = useState<CategoryDto | null>(null);
-  const [budgetLimitInput, setBudgetLimitInput] = useState<string>("");
-  const [isSaving, setIsSaving] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // AI Interview modal state
   const [isInterviewOpen, setIsInterviewOpen] = useState(false);
@@ -51,30 +48,18 @@ export default function BudgetPage() {
       .catch(() => { /* abaikan jika gagal, default 10% sudah memadai */ });
   }, []);
 
-  const handleOpenEdit = (category: CategoryDto) => {
-    setSelectedCategory(category);
-    setBudgetLimitInput(category.budgetLimit ? formatCurrencyInput(category.budgetLimit) : "");
-    setErrorMessage(null);
-  };
+  const handleOpenEdit = (category: CategoryDto) => setSelectedCategory(category);
 
-  const handleSaveBudget = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedCategory) return;
-
-    setErrorMessage(null);
-    const parsed = parseCurrencyInput(budgetLimitInput);
-    const numericLimit = budgetLimitInput.trim() ? (parsed > 0 ? parsed : null) : null;
-
+  const handleSaveBudget = async (categoryId: string, numericLimit: number | null): Promise<boolean> => {
     // Mutasi instan di memori (0ms!)
     mutateCategories((prev) =>
       prev.map((c) =>
-        c.id === selectedCategory.id ? { ...c, budgetLimit: numericLimit } : c
+        c.id === categoryId ? { ...c, budgetLimit: numericLimit } : c
       )
     );
 
-    setIsSaving(true);
     try {
-      const res = await fetch(`/api/categories/${selectedCategory.id}`, {
+      const res = await fetch(`/api/categories/${categoryId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -84,18 +69,15 @@ export default function BudgetPage() {
 
       const json = await res.json();
       if (!res.ok || json.error) {
-        setErrorMessage(json.error?.message || "Gagal memperbarui budget");
         refreshData(true);
-        return;
+        return false;
       }
 
       refreshData(true);
-      setSelectedCategory(null);
+      return true;
     } catch {
-      setErrorMessage("Terjadi gangguan jaringan saat menyimpan budget");
       refreshData(true);
-    } finally {
-      setIsSaving(false);
+      return false;
     }
   };
 
@@ -108,19 +90,11 @@ export default function BudgetPage() {
       );
     }
 
-    const colorClasses = {
-      green: "bg-budget-green text-white",
-      yellow: "bg-budget-yellow text-text",
-      orange: "bg-budget-orange text-white",
-      red: "bg-budget-red text-white",
-      neutral: "bg-field text-text-secondary",
-    };
-
-    const color = cat.statusColor || "neutral";
-
     return (
       <span
-        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${colorClasses[color]}`}
+        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${getBudgetStatusBadgeClass(
+          cat.statusColor
+        )}`}
       >
         Sisa {cat.remainingPercent ?? 0}%
       </span>
@@ -339,44 +313,11 @@ export default function BudgetPage() {
       </div>
 
       {/* Modal Edit Budget Limit */}
-      <BottomSheet
-        isOpen={Boolean(selectedCategory)}
+      <CategoryBudgetEditModal
+        category={selectedCategory}
         onClose={() => setSelectedCategory(null)}
-        title={`Atur Budget: ${selectedCategory?.name}`}
-      >
-        <form onSubmit={handleSaveBudget} className="flex flex-col flex-1 min-h-0 relative">
-          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 pb-28">
-            {errorMessage && (
-              <div className="p-3 bg-expense/10 text-expense text-[13px] font-medium rounded-control">
-                {errorMessage}
-              </div>
-            )}
-
-            <div>
-              <label className="block text-[12px] font-medium text-text-secondary mb-1.5">
-                Batas Budget Bulanan (Rp)
-              </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={budgetLimitInput}
-                onChange={(e) => setBudgetLimitInput(formatCurrencyInput(e.target.value))}
-                placeholder="Rp 0 (Kosongkan untuk tanpa batas)"
-                className="w-full bg-field text-text text-[20px] font-bold px-4 py-3 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none"
-              />
-              <span className="text-[11px] text-text-secondary mt-1 block">
-                Kosongkan field ini jika kategori tidak memiliki batas budget.
-              </span>
-            </div>
-          </div>
-
-          <div className="absolute bottom-0 left-0 right-0 p-4 bg-surface/95 backdrop-blur-md border-t border-border z-30 shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
-            <Button type="submit" variant="primary" fullWidth isLoading={isSaving}>
-              Simpan Perubahan
-            </Button>
-          </div>
-        </form>
-      </BottomSheet>
+        onSave={handleSaveBudget}
+      />
 
       {/* Modal AI Budget Interview */}
       <BudgetInterviewModal
