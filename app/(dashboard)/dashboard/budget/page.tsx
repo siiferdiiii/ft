@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { BottomNav } from "@/components/ui/BottomNav";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
-import { EditIcon } from "@/components/ui/Icons";
+import { EditIcon, CategoryIcon } from "@/components/ui/Icons";
 import { CategoryDto } from "@/lib/types";
 import { formatCurrency, formatCurrencyInput, parseCurrencyInput } from "@/lib/currency";
 import { useAppData } from "@/lib/context/AppDataContext";
@@ -229,8 +230,41 @@ export default function BudgetPage() {
         </div>
       </div>
 
+      {/* Tombol Kelola Kategori */}
+      <Link
+        href="/dashboard/kategori"
+        id="btn-manage-categories"
+        className="flex items-center justify-between p-4 bg-surface rounded-card-wallet border border-border hover:bg-field hover:border-primary/30 transition-all active:scale-[0.99] group shadow-none"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-chip flex items-center justify-center text-primary group-hover:scale-105 transition-transform flex-shrink-0">
+            <CategoryIcon className="w-5 h-5" />
+          </div>
+          <div>
+            <span className="text-[14px] font-semibold text-text block">
+              Kelola Kategori
+            </span>
+            <span className="text-[12px] text-text-secondary block">
+              Tambah, edit, atau hapus kategori
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 text-text-secondary group-hover:text-primary transition-colors">
+          <span className="text-[12px] font-medium hidden sm:inline">Buka</span>
+          <svg className="w-5 h-5 transform group-hover:translate-x-0.5 transition-transform" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
+          </svg>
+        </div>
+      </Link>
+
       {/* Daftar Kategori & Budget */}
       <div className="space-y-3">
+        <div className="flex items-center justify-between px-0.5 pt-1">
+          <h2 className="text-[14px] font-semibold text-text">Batas Anggaran Kategori</h2>
+          <span className="text-[11px] text-text-secondary font-medium">
+            {categories.length} Kategori
+          </span>
+        </div>
         {categories.map((cat) => {
           const expense = cat.currentExpense || 0;
           const limit = cat.budgetLimit;

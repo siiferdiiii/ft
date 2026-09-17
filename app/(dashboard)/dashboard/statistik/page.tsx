@@ -3,12 +3,14 @@
 import React, { useState, useEffect, useRef } from "react";
 import { DonutRingChart, HeatmapCalendar } from "@/components/features/StatisticsCharts";
 import { BottomNav } from "@/components/ui/BottomNav";
-import { StatisticsDto } from "@/lib/types";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { StatisticsDto, TransactionType } from "@/lib/types";
 import { formatCurrency } from "@/lib/currency";
 
 export default function StatisticsPage() {
   const [period, setPeriod] = useState<"monthly" | "weekly">("monthly");
   const [monthOffset, setMonthOffset] = useState<number>(0);
+  const [chartType, setChartType] = useState<TransactionType>("EXPENSE");
   const [stats, setStats] = useState<StatisticsDto | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [slideDirection, setSlideDirection] = useState<"left" | "right" | null>(null);
@@ -235,36 +237,53 @@ export default function StatisticsPage() {
       >
         {/* Ringkasan Arus Kas */}
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-surface p-4 rounded-card-lg border border-border">
+          <button
+            type="button"
+            onClick={() => setChartType("INCOME")}
+            className="text-left bg-surface p-4 rounded-card-lg border border-border hover:border-income/40 transition-all active:scale-[0.98]"
+          >
             <span className="text-[11px] font-medium text-text-secondary block mb-1">
               Total Pemasukan
             </span>
             <div className="text-[17px] font-bold text-income truncate">
               {isLoading ? "..." : formatCurrency(stats?.totalIncome || 0)}
             </div>
-          </div>
-          <div className="bg-surface p-4 rounded-card-lg border border-border">
+          </button>
+          <button
+            type="button"
+            onClick={() => setChartType("EXPENSE")}
+            className="text-left bg-surface p-4 rounded-card-lg border border-border hover:border-expense/40 transition-all active:scale-[0.98]"
+          >
             <span className="text-[11px] font-medium text-text-secondary block mb-1">
               Total Pengeluaran
             </span>
             <div className="text-[17px] font-bold text-expense truncate">
               {isLoading ? "..." : formatCurrency(stats?.totalExpense || 0)}
             </div>
-          </div>
+          </button>
         </div>
 
-        {/* Donut Chart Pengeluaran */}
+        {/* Donut Chart Pengeluaran & Pemasukan (Merged) */}
         <DonutRingChart
-          title={`Pengeluaran (${stats?.monthLabel || ""})`}
-          total={stats?.totalExpense || 0}
-          data={stats?.expenseByCategory || []}
-        />
-
-        {/* Donut Chart Pemasukan */}
-        <DonutRingChart
-          title={`Pemasukan (${stats?.monthLabel || ""})`}
-          total={stats?.totalIncome || 0}
-          data={stats?.incomeByCategory || []}
+          title={`${chartType === "EXPENSE" ? "Pengeluaran" : "Pemasukan"} (${stats?.monthLabel || ""})`}
+          total={
+            chartType === "EXPENSE"
+              ? stats?.totalExpense || 0
+              : stats?.totalIncome || 0
+          }
+          data={
+            chartType === "EXPENSE"
+              ? stats?.expenseByCategory || []
+              : stats?.incomeByCategory || []
+          }
+          emptyMessage={`Belum ada data ${chartType === "EXPENSE" ? "pengeluaran" : "pemasukan"} pada periode ini`}
+          headerControl={
+            <SegmentedControl
+              value={chartType}
+              onChange={setChartType}
+              order={["INCOME", "EXPENSE"]}
+            />
+          }
         />
 
         {/* Kalender Heatmap Harian */}

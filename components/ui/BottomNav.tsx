@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { WalletIcon, StatsIcon, BudgetIcon, CategoryIcon } from "./Icons";
+import { WalletIcon, StatsIcon, BudgetIcon } from "./Icons";
 
 export const BottomNav: React.FC = () => {
   const pathname = usePathname();
@@ -32,12 +32,6 @@ export const BottomNav: React.FC = () => {
       href: "/dashboard/dompet",
       icon: <WalletIcon className="w-5 h-5" />,
       active: pathname === "/dashboard/dompet",
-    },
-    {
-      label: "Kategori",
-      href: "/dashboard/kategori",
-      icon: <CategoryIcon className="w-5 h-5" />,
-      active: pathname === "/dashboard/kategori",
     },
   ];
 

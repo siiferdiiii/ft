@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { BottomNav } from "@/components/ui/BottomNav";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
@@ -141,11 +142,22 @@ export default function CategoriesPage() {
   return (
     <div className="flex-1 flex flex-col px-5 pt-6 pb-24 space-y-5">
       <div className="flex items-center justify-between">
-        <div>
-          <span className="text-[12px] font-medium text-text-secondary block">
-            Pengelompokan Transaksi
-          </span>
-          <h1 className="text-[20px] font-bold text-text">Daftar Kategori</h1>
+        <div className="flex items-center gap-2.5">
+          <Link
+            href="/dashboard/budget"
+            className="p-2 -ml-2 rounded-control text-text-secondary hover:text-text hover:bg-field active:scale-95 transition-all"
+            aria-label="Kembali ke Budget"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+            </svg>
+          </Link>
+          <div>
+            <span className="text-[12px] font-medium text-text-secondary block">
+              Pengelompokan Transaksi
+            </span>
+            <h1 className="text-[20px] font-bold text-text">Daftar Kategori</h1>
+          </div>
         </div>
 
         <button

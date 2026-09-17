@@ -14,10 +14,18 @@ interface DonutChartProps {
     color: string;
     isLargest?: boolean;
   }>;
-  title: string;
+  title?: string;
+  headerControl?: React.ReactNode;
+  emptyMessage?: string;
 }
 
-export const DonutRingChart: React.FC<DonutChartProps> = ({ total, data, title }) => {
+export const DonutRingChart: React.FC<DonutChartProps> = ({
+  total,
+  data,
+  title,
+  headerControl,
+  emptyMessage,
+}) => {
   // SVG Donut calculation
   // Radius R = 70, viewBox 200x200, center (100, 100), strokeWidth = 22
   const radius = 70;
@@ -28,11 +36,16 @@ export const DonutRingChart: React.FC<DonutChartProps> = ({ total, data, title }
 
   return (
     <div className="bg-surface p-5 rounded-card-lg border border-border">
-      <h3 className="text-[14px] font-semibold text-text mb-4">{title}</h3>
+      {(title || headerControl) && (
+        <div className="flex flex-col gap-3 mb-4">
+          {title && <h3 className="text-[14px] font-semibold text-text">{title}</h3>}
+          {headerControl}
+        </div>
+      )}
 
       {total === 0 || data.length === 0 ? (
         <div className="py-12 text-center text-[13px] text-text-secondary">
-          Belum ada data transaksi pada periode ini
+          {emptyMessage || "Belum ada data transaksi pada periode ini"}
         </div>
       ) : (
         <>
