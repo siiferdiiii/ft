@@ -20,11 +20,15 @@ export const SimulatorACompoundModal: React.FC<SimulatorACompoundModalProps> = (
 }) => {
   // Inisialisasi: cek apakah user sudah pernah simpan nilai sebelumnya di localStorage
   const [monthlyAmount, setMonthlyAmount] = useState<number>(() => {
+    let val = 1500000;
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("ft_saved_sim_monthly");
-      if (saved && !isNaN(Number(saved))) return Number(saved);
+      if (saved && !isNaN(Number(saved))) val = Number(saved);
+      else if (initialMonthlyAmount && initialMonthlyAmount > 0) val = initialMonthlyAmount;
+    } else if (initialMonthlyAmount && initialMonthlyAmount > 0) {
+      val = initialMonthlyAmount;
     }
-    return initialMonthlyAmount && initialMonthlyAmount > 0 ? initialMonthlyAmount : 1500000;
+    return Math.max(200000, Math.min(15000000, val));
   });
 
   const [annualReturn, setAnnualReturn] = useState<number>(() => {
@@ -272,17 +276,17 @@ export const SimulatorACompoundModal: React.FC<SimulatorACompoundModalProps> = (
             </div>
             <input
               type="range"
-              min={50000}
-              max={5000000}
-              step={50000}
+              min={200000}
+              max={15000000}
+              step={100000}
               value={monthlyAmount}
               onChange={(e) => setMonthlyAmount(Number(e.target.value))}
               className="w-full accent-primary h-2 bg-field rounded-lg cursor-pointer"
             />
             <div className="flex justify-between text-[10px] text-text-secondary">
-              <span>Rp50.000</span>
-              <span>Rp2.500.000</span>
-              <span>Rp5.000.000</span>
+              <span>Rp200.000</span>
+              <span>Rp7.500.000</span>
+              <span>Rp15.000.000</span>
             </div>
           </div>
 
