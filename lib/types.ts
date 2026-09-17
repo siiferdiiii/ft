@@ -109,3 +109,39 @@ export interface StatisticsDto {
   hasNextMonth?: boolean;
   hasPrevMonth?: boolean;
 }
+
+export interface MonthlyBalanceGrowthPoint {
+  monthKey: string;      // "2026-09"
+  label: string;         // "Sep"
+  fullLabel: string;     // "September 2026"
+  balance: number;       // total cumulative balance at end of this month
+  income: number;        // total income received in this month
+  expense: number;       // total expense spent in this month
+  net: number;           // income - expense (surplus or minus)
+}
+
+export interface BalanceGrowthDto {
+  currentBalance: number;
+  history: MonthlyBalanceGrowthPoint[];
+  thisMonth: {
+    label: string;
+    income: number;
+    expense: number;
+    net: number;
+    isSurplus: boolean;
+  };
+  prevMonth: {
+    label: string;
+    income: number;
+    expense: number;
+    net: number;
+    isSurplus: boolean;
+  };
+  monthOverMonth: {
+    difference: number;      // currentBalance - prevMonthBalance
+    percentage: number;      // % change
+    isPositive: boolean;     // difference >= 0
+    incomeDifference: number; // thisMonth.income - prevMonth.income
+  };
+}
+

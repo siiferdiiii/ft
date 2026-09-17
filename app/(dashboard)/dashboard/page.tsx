@@ -12,9 +12,10 @@ import {
 import { ReceiptScannerModal } from "@/components/features/ReceiptScannerModal";
 import { DanaAbadiSuggestBanner, IncomeAllocationSuggestion } from "@/components/features/DanaAbadiSuggestBanner";
 import { SimulatorACompoundModal } from "@/components/features/SimulatorACompoundModal";
+import { BalanceGrowthChart } from "@/components/features/BalanceGrowthChart";
 import { BottomNav } from "@/components/ui/BottomNav";
 import { CameraIcon, PlusIcon } from "@/components/ui/Icons";
-import { TransactionType, InputSource } from "@/lib/types";
+import { TransactionType, InputSource, BalanceGrowthDto } from "@/lib/types";
 import { formatCurrency } from "@/lib/currency";
 import { AnimatedBalance } from "@/components/ui/AnimatedBalance";
 import { ParsedVoiceResult } from "@/lib/parseVoiceAmount";
@@ -42,6 +43,8 @@ export default function DashboardPage() {
   const [notification, setNotification] = useState<string | null>(null);
   const [userPercent, setUserPercent] = useState<number>(10);
   const [incomeSuggestion, setIncomeSuggestion] = useState<IncomeAllocationSuggestion | null>(null);
+  const [balanceGrowth, setBalanceGrowth] = useState<BalanceGrowthDto | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
 
   // Cari dompet Dana Abadi
   const danaAbadiWallet = wallets.find((w) => Boolean(w.isPerpetualFund));
@@ -72,7 +75,43 @@ export default function DashboardPage() {
     };
 
     loadSettingsAndCache();
+    setIsMounted(true);
   }, []);
+
+  // Ambil data pertumbuhan saldo & komparasi bulanan (dengan cache lokal 0ms)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("ft_cache_balance_growth");
+        if (cached) {
+          setBalanceGrowth(JSON.parse(cached));
+        }
+      } catch {
+        // Abaikan cache rusak
+      }
+    }
+
+    const fetchBalanceGrowth = async () => {
+      try {
+        const res = await fetch("/api/statistics/balance-growth");
+        const json = await res.json();
+        if (json.data) {
+          setBalanceGrowth(json.data);
+          if (typeof window !== "undefined") {
+            try {
+              localStorage.setItem("ft_cache_balance_growth", JSON.stringify(json.data));
+            } catch {
+              // Storage quota
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Gagal memuat histori pertumbuhan saldo:", err);
+      }
+    };
+
+    fetchBalanceGrowth();
+  }, [recentTransactions, wallets]);
 
   // Total kumulasi saldo seluruh dompet
   const totalBalance = wallets.reduce((sum, w) => sum + w.balance, 0);
@@ -249,18 +288,63 @@ export default function DashboardPage() {
         />
       )}
 
-      {/* Hero Card Total Saldo Kumulatif */}
+      {/* Hero Card Total Saldo Kumulatif & Tren Pertumbuhan Saldo (Ringkas Sesuai Foto) */}
       <div className="bg-surface p-5 rounded-card-lg border border-border mb-6">
-        <span className="text-[12px] font-medium text-text-secondary block mb-1">
-          Total Kumulasi Saldo
-        </span>
-        <div className="text-[32px] font-bold text-text tracking-tight">
-          {isLoading ? "Memuat..." : (
-            <AnimatedBalance value={totalBalance} duration={700} />
+        <div className="flex items-center justify-between gap-3">
+          {/* Kolom Kiri: Label, Angka Saldo, & Perubahan vs Bulan Lalu */}
+          <div className="flex-1 min-w-0">
+            <span className="text-[12px] font-medium text-text-secondary block mb-1">
+              Total Kumulasi Saldo
+            </span>
+            <div className="text-[28px] sm:text-[32px] font-bold text-text tracking-tight leading-none mb-2">
+              {isLoading ? (
+                "Memuat..."
+              ) : (
+                <AnimatedBalance value={totalBalance} duration={700} />
+              )}
+            </div>
+
+            {/* Indikator Dari Bulan Sebelumnya & Total Uang Didapat (Ringkas & Informatif) */}
+            {isMounted && balanceGrowth ? (
+              <div className="space-y-0.5">
+                <div
+                  className={`text-[13px] font-bold flex items-center gap-1.5 leading-none ${
+                    balanceGrowth.monthOverMonth.isPositive
+                      ? "text-income"
+                      : "text-expense"
+                  }`}
+                >
+                  <span>
+                    {balanceGrowth.monthOverMonth.isPositive ? "+" : "-"}
+                    {formatCurrency(Math.abs(balanceGrowth.monthOverMonth.difference))}
+                  </span>
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 bg-field rounded-control leading-none">
+                    {balanceGrowth.monthOverMonth.isPositive ? "Surplus" : "Minus"}
+                  </span>
+                </div>
+                <span className="text-[11px] font-medium text-text-secondary block">
+                  Dari bulan sebelumnya
+                </span>
+                <span className="text-[10.5px] text-text-secondary block pt-0.5">
+                  Didapat: <span className="font-semibold text-text">{formatCurrency(balanceGrowth.thisMonth.income)}</span> (bln lalu: <span className="font-medium text-text">{formatCurrency(balanceGrowth.prevMonth.income)}</span>)
+                </span>
+              </div>
+            ) : (
+              <div className="text-[11px] text-text-secondary">
+                Tercakup dari {wallets.length} dompet aktif
+              </div>
+            )}
+          </div>
+
+          {/* Kolom Kanan: Kotak Chart Kecil (Persis Sesuai Sketsa di Foto) */}
+          {isMounted && balanceGrowth && balanceGrowth.history.length > 0 && (
+            <div className="w-[108px] h-[74px] flex-shrink-0 p-1.5 bg-field/50 rounded-control border border-border/60 flex items-center justify-center overflow-hidden">
+              <BalanceGrowthChart
+                history={balanceGrowth.history}
+                isPositive={balanceGrowth.monthOverMonth.isPositive}
+              />
+            </div>
           )}
-        </div>
-        <div className="mt-2 text-[11px] text-text-secondary">
-          Tercakup dari {wallets.length} dompet aktif
         </div>
       </div>
 
