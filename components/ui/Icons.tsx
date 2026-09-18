@@ -249,3 +249,80 @@ export const TrendingUpIcon: React.FC<IconProps> = ({ className = "w-5 h-5", siz
   </svg>
 );
 
+export const HomeNavIcon: React.FC<IconProps> = ({ className = "w-[22px] h-[22px]", size }) => (
+  <svg
+    width={size || 22}
+    height={size || 22}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    <path d="M3 10.5L12 3l9 7.5v8.5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8.5z" />
+    <path d="M9.5 21v-5a2.5 2.5 0 0 1 5 0v5" />
+  </svg>
+);
+
+export const ChartNavIcon: React.FC<IconProps> = ({ className = "w-[22px] h-[22px]", size }) => (
+  <svg
+    width={size || 22}
+    height={size || 22}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    <rect x="3" y="3" width="18" height="18" rx="5" />
+    <path d="M8 17v-4" />
+    <path d="M12 17v-8" />
+    <path d="M16 17v-6" />
+  </svg>
+);
+
+export const CardNavIcon: React.FC<IconProps> = ({ className = "w-[22px] h-[22px]", size }) => (
+  <svg
+    width={size || 22}
+    height={size || 22}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    <rect x="2.5" y="4.5" width="19" height="15" rx="3.5" />
+    <path d="M2.5 9.5h19" />
+    <path d="M6.5 15h4" />
+  </svg>
+);
+
+export const WalletNavIcon: React.FC<IconProps> = ({ className = "w-[22px] h-[22px]", size }) => (
+  <svg
+    width={size || 22}
+    height={size || 22}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    <path d="M4 6a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v11a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V6z" />
+    <path d="M10 3v4a2 2 0 0 0 4 0V3" />
+    <circle cx="12" cy="13" r="1.5" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+
