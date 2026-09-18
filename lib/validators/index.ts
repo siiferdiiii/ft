@@ -134,3 +134,79 @@ export const applyBudgetSchema = z.object({
     .max(100_000_000_000)
     .optional(),
 });
+
+export const goalSchema = z.object({
+  name: z.string().min(1, "Nama tujuan tabungan wajib diisi").max(50, "Nama maksimal 50 karakter").trim(),
+  targetAmount: z
+    .number({ invalid_type_error: "Target nominal harus berupa angka" })
+    .positive("Target nominal harus lebih dari 0")
+    .max(100_000_000_000, "Nominal melebihi batas wajar"),
+  targetDate: z.string().nullable().optional(),
+  allocationPercent: z
+    .number({ invalid_type_error: "Persentase harus berupa angka" })
+    .int("Harus berupa bilangan bulat")
+    .min(1, "Minimal alokasi 1%")
+    .max(50, "Maksimal alokasi 50%")
+    .default(5),
+});
+
+export const updateGoalSchema = z.object({
+  name: z.string().min(1).max(50).trim().optional(),
+  targetAmount: z.number().positive().max(100_000_000_000).optional(),
+  targetDate: z.string().nullable().optional(),
+  allocationPercent: z.number().int().min(1).max(50).optional(),
+  isCompleted: z.boolean().optional(),
+  isArchived: z.boolean().optional(),
+});
+
+export const assetSchema = z.object({
+  name: z.string().min(1, "Nama aset wajib diisi").max(60, "Nama aset maksimal 60 karakter").trim(),
+  category: z.string().min(1, "Kategori aset wajib diisi").max(40, "Kategori maksimal 40 karakter").trim(),
+  value: z
+    .number({ invalid_type_error: "Nilai aset harus berupa angka" })
+    .min(0, "Nilai aset tidak boleh negatif")
+    .max(10_000_000_000_000, "Nilai aset melebihi batas wajar"),
+  liquidityTier: z.enum(["INSTANT", "T3", "ILLIQUID"], {
+    errorMap: () => ({ message: "Tingkat likuiditas tidak valid" }),
+  }),
+});
+
+export const updateAssetSchema = z.object({
+  name: z.string().min(1).max(60).trim().optional(),
+  category: z.string().min(1).max(40).trim().optional(),
+  value: z.number().min(0).max(10_000_000_000_000).optional(),
+  liquidityTier: z.enum(["INSTANT", "T3", "ILLIQUID"]).optional(),
+  isArchived: z.boolean().optional(),
+});
+
+export const debtSchema = z.object({
+  name: z.string().min(1, "Nama utang wajib diisi").max(60, "Nama utang maksimal 60 karakter").trim(),
+  principal: z
+    .number({ invalid_type_error: "Total utang awal harus berupa angka" })
+    .positive("Total utang awal harus lebih dari 0")
+    .max(100_000_000_000, "Nilai utang melebihi batas wajar"),
+  remainingBalance: z
+    .number({ invalid_type_error: "Sisa utang harus berupa angka" })
+    .min(0, "Sisa utang tidak boleh negatif")
+    .max(100_000_000_000, "Nilai utang melebihi batas wajar"),
+  monthlyPayment: z.number().positive("Nominal cicilan harus lebih dari 0").nullable().optional(),
+  dueDayOfMonth: z
+    .number()
+    .int()
+    .min(1, "Tanggal jatuh tempo antara 1 - 31")
+    .max(31, "Tanggal jatuh tempo antara 1 - 31")
+    .nullable()
+    .optional(),
+  interestRate: z.number().min(0).max(100).nullable().optional(),
+});
+
+export const updateDebtSchema = z.object({
+  name: z.string().min(1).max(60).trim().optional(),
+  principal: z.number().positive().max(100_000_000_000).optional(),
+  remainingBalance: z.number().min(0).max(100_000_000_000).optional(),
+  monthlyPayment: z.number().positive().nullable().optional(),
+  dueDayOfMonth: z.number().int().min(1).max(31).nullable().optional(),
+  interestRate: z.number().min(0).max(100).nullable().optional(),
+  isPaidOff: z.boolean().optional(),
+});
+

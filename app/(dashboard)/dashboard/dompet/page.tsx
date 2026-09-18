@@ -5,7 +5,7 @@ import Link from "next/link";
 import { BottomNav } from "@/components/ui/BottomNav";
 import { TransferModal } from "@/components/features/TransferModal";
 import { WalletFormModal } from "@/components/features/WalletFormModal";
-import { PlusIcon, TransferIcon, TrashIcon, EditIcon, WalletIcon, InfinityIcon, TrendingUpIcon } from "@/components/ui/Icons";
+import { PlusIcon, TransferIcon, TrashIcon, EditIcon, WalletIcon, InfinityIcon, TrendingUpIcon, ScaleIcon } from "@/components/ui/Icons";
 import { SimulatorACompoundModal } from "@/components/features/SimulatorACompoundModal";
 import { WalletDto, WalletType } from "@/lib/types";
 import { formatCurrency } from "@/lib/currency";
@@ -186,6 +186,27 @@ export default function WalletsPage() {
             <span className="text-[13px] font-bold text-text block">Kembangkan</span>
             <span className="text-[11px] text-text-secondary">Mitra Investasi OJK</span>
           </div>
+        </Link>
+
+        {/* Card Akses Aset & Utang / Kekayaan Bersih (Opsi A) */}
+        <Link
+          href="/dashboard/aset-utang"
+          className="col-span-2 p-3.5 bg-surface rounded-card-wallet border border-border hover:border-primary/50 flex items-center justify-between transition-all group shadow-2xs"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+              <ScaleIcon className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-[13px] font-bold text-text block">Aset & Utang (Kekayaan Bersih)</span>
+              <span className="text-[11px] text-text-secondary">
+                Lacak aset fisik/investasi, kewajiban utang, & liquid cash T+3
+              </span>
+            </div>
+          </div>
+          <span className="text-[11px] font-bold text-primary group-hover:translate-x-0.5 transition-transform">
+            Buka →
+          </span>
         </Link>
       </div>
 

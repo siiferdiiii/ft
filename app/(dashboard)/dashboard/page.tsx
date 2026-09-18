@@ -10,13 +10,15 @@ import {
   PreFillTransactionData,
 } from "@/components/features/TransactionConfirmModal";
 import { ReceiptScannerModal } from "@/components/features/ReceiptScannerModal";
-import { DanaAbadiSuggestBanner, IncomeAllocationSuggestion } from "@/components/features/DanaAbadiSuggestBanner";
+import { IncomeAllocationBanner } from "@/components/features/IncomeAllocationBanner";
+import { DebtDueReminderBanner } from "@/components/features/DebtDueReminderBanner";
+import { DebtPaymentModal } from "@/components/features/DebtPaymentModal";
 import { SimulatorACompoundModal } from "@/components/features/SimulatorACompoundModal";
 import { BalanceGrowthChart } from "@/components/features/BalanceGrowthChart";
 import { TransactionRow } from "@/components/features/TransactionRow";
 import { BottomNav } from "@/components/ui/BottomNav";
-import { CameraIcon, PlusIcon } from "@/components/ui/Icons";
-import { TransactionType, InputSource, BalanceGrowthDto } from "@/lib/types";
+import { CameraIcon, PlusIcon, ScaleIcon } from "@/components/ui/Icons";
+import { TransactionType, InputSource, BalanceGrowthDto, GoalDto, DebtDto, NetWorthSummaryDto } from "@/lib/types";
 import { formatCurrency } from "@/lib/currency";
 import { AnimatedBalance } from "@/components/ui/AnimatedBalance";
 import { ParsedVoiceResult } from "@/lib/parseVoiceAmount";
@@ -43,12 +45,35 @@ export default function DashboardPage() {
   const [preFillData, setPreFillData] = useState<PreFillTransactionData | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
   const [userPercent, setUserPercent] = useState<number>(10);
-  const [incomeSuggestion, setIncomeSuggestion] = useState<IncomeAllocationSuggestion | null>(null);
+  const [incomeSuggestion, setIncomeSuggestion] = useState<{
+    incomeAmount: number;
+    sourceWalletId: string;
+    sourceWalletName: string;
+  } | null>(null);
   const [balanceGrowth, setBalanceGrowth] = useState<BalanceGrowthDto | null>(null);
   const [isMounted, setIsMounted] = useState(false);
 
+  // Data Goals & Utang/Kekayaan Bersih
+  const [goals, setGoals] = useState<GoalDto[]>([]);
+  const [netWorthData, setNetWorthData] = useState<NetWorthSummaryDto | null>(null);
+  const [paymentDebt, setPaymentDebt] = useState<DebtDto | null>(null);
+
   // Cari dompet Dana Abadi
   const danaAbadiWallet = wallets.find((w) => Boolean(w.isPerpetualFund));
+
+  const fetchGoalsAndNetWorth = async () => {
+    try {
+      const [gRes, nwRes] = await Promise.all([
+        fetch("/api/goals"),
+        fetch("/api/net-worth"),
+      ]);
+      const [gJson, nwJson] = await Promise.all([gRes.json(), nwRes.json()]);
+      if (gJson.data) setGoals(gJson.data);
+      if (nwJson.data) setNetWorthData(nwJson.data);
+    } catch {
+      // Abaikan kendala fetch non-kritis
+    }
+  };
 
   // Ambil pengaturan persentase alokasi & cache saran income aktif
   useEffect(() => {
@@ -76,6 +101,7 @@ export default function DashboardPage() {
     };
 
     loadSettingsAndCache();
+    fetchGoalsAndNetWorth();
     setIsMounted(true);
   }, []);
 
@@ -171,18 +197,14 @@ export default function DashboardPage() {
       return;
     }
 
-    // Setiap transaksi tipe INCOME tersimpan -> hitung amount * (User.perpetualFundPercent / 100)
-    // dan tampilkan banner non-blocking per PRD §3.2
+    // Setiap transaksi tipe INCOME tersimpan -> simpan data saran alokasi
+    // dan tampilkan banner non-blocking per PRD §3.2 (Dana Abadi + Goals aktif)
     if (txData.type === "INCOME") {
-      const percent = userPercent || 10;
-      const allocAmount = Math.round(txData.amount * (percent / 100));
       const sourceW = wallets.find((w) => w.id === txData.walletId);
-      const suggestion: IncomeAllocationSuggestion = {
+      const suggestion = {
         incomeAmount: txData.amount,
-        allocationAmount: allocAmount,
         sourceWalletId: txData.walletId,
         sourceWalletName: sourceW?.name || "Dompet Asal",
-        percent,
       };
 
       setIncomeSuggestion(suggestion);
@@ -214,19 +236,40 @@ export default function DashboardPage() {
     } catch {
       handleNotification("Terjadi kendala jaringan saat mentransfer alokasi");
     } finally {
-      setIncomeSuggestion(null);
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("ft_pending_income_suggestion");
-        localStorage.setItem("ft_dana_abadi_consecutive_skips", "0");
-      }
       refreshData(true);
+      fetchGoalsAndNetWorth();
+    }
+  };
+
+  const handleAllocateGoal = async (goal: GoalDto, amount: number, fromWalletId: string) => {
+    transferOptimistic(fromWalletId, goal.walletId, amount);
+    try {
+      const res = await fetch("/api/transfers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fromWalletId,
+          toWalletId: goal.walletId,
+          amount,
+          note: `Alokasi otomatis ke goal: ${goal.name}`,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        handleNotification(json.error?.message || `Gagal mengalokasikan ke goal ${goal.name}`);
+      } else {
+        handleNotification(`Berhasil menyisihkan ${formatCurrency(amount)} ke goal ${goal.name}!`);
+      }
+    } catch {
+      handleNotification("Terjadi kendala jaringan saat mentransfer alokasi goal");
+    } finally {
+      refreshData(true);
+      fetchGoalsAndNetWorth();
     }
   };
 
   const handleSkipAllocation = () => {
-    setIncomeSuggestion(null);
     if (typeof window !== "undefined") {
-      localStorage.removeItem("ft_pending_income_suggestion");
       const currentSkips = parseInt(
         localStorage.getItem("ft_dana_abadi_consecutive_skips") || "0",
         10
@@ -265,6 +308,14 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Banner Pasif Reminder Cicilan Jatuh Tempo H-3 per PRD_ASET_UTANG §2.3 */}
+      {netWorthData && netWorthData.upcomingDebts.length > 0 && (
+        <DebtDueReminderBanner
+          debts={netWorthData.upcomingDebts}
+          onPayDebt={(debt) => setPaymentDebt(debt)}
+        />
+      )}
+
       {/* Banner Notifikasi / Error jika ada */}
       {notification && (
         <div className="mb-4 p-3 bg-chip text-primary text-[12px] font-medium rounded-control border border-border flex items-center justify-between animate-in fade-in">
@@ -278,14 +329,25 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Banner Non-Blocking Auto-Suggest Alokasi Dana Abadi 10% per PRD §3.2 */}
+      {/* Banner Multi-Row Auto-Suggest Alokasi Dana Abadi & Goals per PRD_GOALS §3.2 */}
       {incomeSuggestion && (
-        <DanaAbadiSuggestBanner
-          suggestion={incomeSuggestion}
+        <IncomeAllocationBanner
+          incomeAmount={incomeSuggestion.incomeAmount}
+          sourceWalletId={incomeSuggestion.sourceWalletId}
+          sourceWalletName={incomeSuggestion.sourceWalletName}
           danaAbadiWallet={danaAbadiWallet}
-          onAllocate={handleAllocate}
+          perpetualFundPercent={userPercent}
+          goals={goals}
+          onAllocateDanaAbadi={handleAllocate}
           onCreateDanaAbadiWallet={() => router.push("/dashboard/dompet")}
-          onSkip={handleSkipAllocation}
+          onAllocateGoal={handleAllocateGoal}
+          onClose={() => {
+            setIncomeSuggestion(null);
+            if (typeof window !== "undefined") {
+              localStorage.removeItem("ft_pending_income_suggestion");
+            }
+          }}
+          onSkipDanaAbadi={handleSkipAllocation}
         />
       )}
 
@@ -459,7 +521,11 @@ export default function DashboardPage() {
       <SimulatorACompoundModal
         isOpen={isSimAOpen}
         onClose={() => setIsSimAOpen(false)}
-        initialMonthlyAmount={incomeSuggestion?.allocationAmount || 300000}
+        initialMonthlyAmount={
+          incomeSuggestion
+            ? Math.round((incomeSuggestion.incomeAmount * userPercent) / 100)
+            : 300000
+        }
       />
 
       {/* Bottom Navigation */}

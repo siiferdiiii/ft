@@ -14,6 +14,7 @@ export async function GET() {
       where: {
         userId: user.id,
         isArchived: false,
+        goal: null, // Dedicated goal wallet tidak muncul di dompet harian (PRD_GOALS §2)
       },
       orderBy: { createdAt: "asc" },
     });

@@ -164,12 +164,34 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    // Kalkulasi Free Cash Flow (Bulanan) per PRD_ASET_UTANG §2.5:
+    // Total Pemasukan − Total Pengeluaran − Total monthlyPayment utang aktif
+    const activeDebts = await prisma.debt.findMany({
+      where: {
+        userId: user.id,
+        isPaidOff: false,
+      },
+    });
+
+    const totalMonthlyDebtPayments = activeDebts.reduce(
+      (sum, d) => sum + (d.monthlyPayment !== null ? Number(d.monthlyPayment) : 0),
+      0
+    );
+
+    const freeCashFlow = {
+      amount: totalIncome - totalExpense - totalMonthlyDebtPayments,
+      totalIncome,
+      totalExpense,
+      totalMonthlyDebtPayments,
+    };
+
     const result: StatisticsDto = {
       totalExpense,
       totalIncome,
       expenseByCategory: expenseArray,
       incomeByCategory: incomeArray,
       calendarHeatmap,
+      freeCashFlow,
       monthLabel,
       monthOffset,
       hasNextMonth: monthOffset < 0,

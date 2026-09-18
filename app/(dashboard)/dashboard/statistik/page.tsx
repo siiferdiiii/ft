@@ -286,6 +286,52 @@ export default function StatisticsPage() {
           }
         />
 
+        {/* Card Free Cash Flow (Bulanan) per PRD_ASET_UTANG §2.5 */}
+        {stats?.freeCashFlow && (
+          <div className="p-4 bg-surface rounded-card-lg border border-border shadow-xs space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] font-bold text-text">
+                Free Cash Flow (Arus Kas Bebas)
+              </span>
+              <span
+                className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                  stats.freeCashFlow.amount >= 0
+                    ? "bg-income/10 text-income"
+                    : "bg-expense/10 text-expense"
+                }`}
+              >
+                {stats.freeCashFlow.amount >= 0 ? "Surplus Bebas" : "Defisit"}
+              </span>
+            </div>
+
+            <div
+              className={`text-[20px] font-bold tracking-tight ${
+                stats.freeCashFlow.amount >= 0 ? "text-income" : "text-expense"
+              }`}
+            >
+              {formatCurrency(stats.freeCashFlow.amount)}
+            </div>
+
+            <div className="text-[11px] text-text-secondary leading-normal border-t border-border/70 pt-2 space-y-1">
+              <div className="flex justify-between">
+                <span>Pemasukan − Pengeluaran:</span>
+                <span className="font-semibold text-text">
+                  {formatCurrency(stats.totalIncome - stats.totalExpense)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Beban Cicilan Utang Bulanan:</span>
+                <span className="font-semibold text-expense">
+                  -{formatCurrency(stats.freeCashFlow.totalMonthlyDebtPayments)}
+                </span>
+              </div>
+              <p className="text-[10.5px] text-text-secondary/80 mt-1 italic">
+                *Sisa uang bersih yang benar-benar bebas dialokasikan ke tabungan atau investasi setelah seluruh biaya hidup & kewajiban cicilan bulanan dipenuhi.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Kalender Heatmap Harian */}
         {stats?.calendarHeatmap && (
           <HeatmapCalendar heatmap={stats.calendarHeatmap} />

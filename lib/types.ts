@@ -104,6 +104,7 @@ export interface StatisticsDto {
     totalAmount: number;
     intensity: 0 | 1 | 2 | 3 | 4;
   }>;
+  freeCashFlow?: FreeCashFlowDto;
   monthLabel?: string;
   monthOffset?: number;
   hasNextMonth?: boolean;
@@ -143,5 +144,59 @@ export interface BalanceGrowthDto {
     isPositive: boolean;     // difference >= 0
     incomeDifference: number; // thisMonth.income - prevMonth.income
   };
+}
+
+export type AssetLiquidityTier = "INSTANT" | "T3" | "ILLIQUID";
+
+export interface GoalDto {
+  id: string;
+  name: string;
+  targetAmount: number;
+  targetDate: string | null;
+  allocationPercent: number;
+  walletId: string;
+  walletBalance: number;
+  isCompleted: boolean;
+  isArchived: boolean;
+  createdAt: string;
+}
+
+export interface AssetDto {
+  id: string;
+  name: string;
+  category: string;
+  value: number;
+  liquidityTier: AssetLiquidityTier;
+  lastValuationAt: string;
+  isArchived: boolean;
+  createdAt: string;
+}
+
+export interface DebtDto {
+  id: string;
+  name: string;
+  principal: number;
+  remainingBalance: number;
+  monthlyPayment: number | null;
+  dueDayOfMonth: number | null;
+  interestRate: number | null;
+  isPaidOff: boolean;
+  createdAt: string;
+}
+
+export interface NetWorthSummaryDto {
+  netWorth: number;
+  totalWalletsBalance: number;
+  totalAssetsValue: number;
+  totalDebtsRemaining: number;
+  liquidCashT3: number;
+  upcomingDebts: DebtDto[];
+}
+
+export interface FreeCashFlowDto {
+  amount: number;
+  totalIncome: number;
+  totalExpense: number;
+  totalMonthlyDebtPayments: number;
 }
 

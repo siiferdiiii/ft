@@ -21,7 +21,18 @@ export interface MockWallet {
   balance: number;
   isArchived: boolean;
   isPerpetualFund: boolean;
+  isGoalDedicated?: boolean;
+  goalId?: string | null;
   createdAt: Date;
+}
+
+export interface MockKeyword {
+  id: string;
+  userId: string;
+  keyword: string;
+  categoryId: string;
+  frequency: number;
+  updatedAt: Date;
 }
 
 export interface MockCategory {
@@ -61,13 +72,42 @@ export interface MockTransfer {
   createdAt: Date;
 }
 
-export interface MockKeyword {
+export interface MockGoal {
   id: string;
   userId: string;
-  keyword: string;
-  categoryId: string;
-  frequency: number;
-  updatedAt: Date;
+  name: string;
+  targetAmount: number;
+  targetDate: Date | null;
+  allocationPercent: number;
+  walletId: string;
+  isCompleted: boolean;
+  isArchived: boolean;
+  createdAt: Date;
+}
+
+export interface MockAsset {
+  id: string;
+  userId: string;
+  name: string;
+  category: string;
+  value: number;
+  liquidityTier: "INSTANT" | "T3" | "ILLIQUID";
+  lastValuationAt: Date;
+  isArchived: boolean;
+  createdAt: Date;
+}
+
+export interface MockDebt {
+  id: string;
+  userId: string;
+  name: string;
+  principal: number;
+  remainingBalance: number;
+  monthlyPayment: number | null;
+  dueDayOfMonth: number | null;
+  interestRate: number | null;
+  isPaidOff: boolean;
+  createdAt: Date;
 }
 
 const DEFAULT_USER_ID = "demo-user-123";
@@ -119,6 +159,20 @@ class MockDatabase {
       isArchived: false,
       isPerpetualFund: true,
       createdAt: new Date(Date.now() - 86400000 * 4),
+    },
+    {
+      id: "w-goal-laptop",
+      userId: DEFAULT_USER_ID,
+      name: "Goal: Beli Laptop Kerja",
+      type: "OTHER",
+      icon: null,
+      color: "#8B5CF6",
+      balance: 3500000,
+      isArchived: false,
+      isPerpetualFund: false,
+      isGoalDedicated: true,
+      goalId: "goal-laptop",
+      createdAt: new Date(Date.now() - 86400000 * 20),
     },
   ];
 
@@ -327,6 +381,61 @@ class MockDatabase {
       categoryId: "cat-transport",
       frequency: 2,
       updatedAt: new Date(),
+    },
+  ];
+
+  goals: MockGoal[] = [
+    {
+      id: "goal-laptop",
+      userId: DEFAULT_USER_ID,
+      name: "Beli Laptop Kerja",
+      targetAmount: 15000000,
+      targetDate: new Date(new Date().getFullYear(), new Date().getMonth() + 4, 1),
+      allocationPercent: 5,
+      walletId: "w-goal-laptop",
+      isCompleted: false,
+      isArchived: false,
+      createdAt: new Date(Date.now() - 86400000 * 20),
+    },
+  ];
+
+  assets: MockAsset[] = [
+    {
+      id: "asset-1",
+      userId: DEFAULT_USER_ID,
+      name: "Reksadana Pasar Uang",
+      category: "Investasi",
+      value: 10000000,
+      liquidityTier: "T3",
+      lastValuationAt: new Date(),
+      isArchived: false,
+      createdAt: new Date(Date.now() - 86400000 * 30),
+    },
+    {
+      id: "asset-2",
+      userId: DEFAULT_USER_ID,
+      name: "Sepeda Motor Vario",
+      category: "Kendaraan",
+      value: 18000000,
+      liquidityTier: "ILLIQUID",
+      lastValuationAt: new Date(Date.now() - 86400000 * 110), // >90 hari untuk demo reminder valuasi
+      isArchived: false,
+      createdAt: new Date(Date.now() - 86400000 * 120),
+    },
+  ];
+
+  debts: MockDebt[] = [
+    {
+      id: "debt-1",
+      userId: DEFAULT_USER_ID,
+      name: "Cicilan Elektronik",
+      principal: 12000000,
+      remainingBalance: 4000000,
+      monthlyPayment: 1000000,
+      dueDayOfMonth: (new Date().getDate() % 28) + 2, // 2 hari lagi agar banner reminder cicilan in-app muncul
+      interestRate: 0,
+      isPaidOff: false,
+      createdAt: new Date(Date.now() - 86400000 * 60),
     },
   ];
 }

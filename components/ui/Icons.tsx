@@ -325,4 +325,119 @@ export const WalletNavIcon: React.FC<IconProps> = ({ className = "w-[22px] h-[22
   </svg>
 );
 
+export const TargetNavIcon: React.FC<IconProps> = ({ className = "w-[22px] h-[22px]", size }) => (
+  <svg
+    width={size || 22}
+    height={size || 22}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    <circle cx="12" cy="12" r="9" />
+    <circle cx="12" cy="12" r="5" />
+    <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+  </svg>
+);
+
+export const ClockIcon: React.FC<IconProps> = ({ className = "w-4 h-4", size }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    <circle cx="12" cy="12" r="10" />
+    <polyline points="12 6 12 12 16 14" />
+  </svg>
+);
+
+export const CheckCircleIcon: React.FC<IconProps> = ({ className = "w-4 h-4", size }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+    <polyline points="22 4 12 14.01 9 11.01" />
+  </svg>
+);
+
+export const AlertCircleIcon: React.FC<IconProps> = ({ className = "w-4 h-4", size }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    <circle cx="12" cy="12" r="10" />
+    <line x1="12" y1="8" x2="12" y2="12" />
+    <line x1="12" y1="16" x2="12.01" y2="16" />
+  </svg>
+);
+
+export const ScaleIcon: React.FC<IconProps> = ({ className = "w-5 h-5", size }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" />
+    <path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" />
+    <path d="M7 21h10" />
+    <path d="M12 3v18" />
+    <path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2" />
+  </svg>
+);
+
+export const ArchiveIcon: React.FC<IconProps> = ({ className = "w-4 h-4", size }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    <polyline points="21 8 21 21 3 21 3 8" />
+    <rect x="1" y="3" width="22" height="5" />
+    <line x1="10" y1="12" x2="14" y2="12" />
+  </svg>
+);
+
+
 

@@ -113,7 +113,7 @@ enum InputSource {
 model Transfer {
   id           String   @id @default(cuid())
   userId       String
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   fromWalletId String
   fromWallet   Wallet   @relation("TransferFrom", fields: [fromWalletId], references: [id])
   toWalletId   String
