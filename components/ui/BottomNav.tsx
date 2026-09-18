@@ -44,7 +44,7 @@ export const BottomNav: React.FC = () => {
       aria-label="Navigasi Utama"
       className="fixed inset-x-0 bottom-0 z-40 pointer-events-none flex justify-center px-4 min-[375px]:px-5 pb-[calc(18px+env(safe-area-inset-bottom,0px))]"
     >
-      <div className="w-full max-w-md bg-white/95 backdrop-blur-md rounded-full shadow-[0_10px_35px_-5px_rgba(0,0,0,0.08)] border border-black/[0.04] px-2 py-2 flex items-center justify-between pointer-events-auto">
+      <div className="w-full max-w-md bg-white/70 backdrop-blur-xl rounded-full shadow-[0_12px_36px_-6px_rgba(0,0,0,0.08),inset_0_1.5px_1px_rgba(255,255,255,0.85)] border border-white/80 ring-1 ring-black/[0.03] px-2 py-2 flex items-center justify-between pointer-events-auto">
         {navItems.map((item) => (
           <Link
             id={item.id}

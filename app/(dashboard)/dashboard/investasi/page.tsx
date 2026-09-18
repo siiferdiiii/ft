@@ -4,6 +4,7 @@ import Link from "next/link";
 import { BottomNav } from "@/components/ui/BottomNav";
 import { AFFILIATE_PARTNERS } from "@/lib/constants/affiliates";
 import { TrendingUpIcon, ShieldIcon, SparkleIcon } from "@/components/ui/Icons";
+import { AccordionGroup, AccordionItem } from "@/components/ui/Accordion";
 
 export default function InvestasiPage() {
   return (
@@ -25,39 +26,75 @@ export default function InvestasiPage() {
         </h1>
       </div>
 
-      {/* Disclaimer Wajib Permanen di Bagian Atas Halaman per PRD §3.5 */}
-      <div className="p-4 bg-field rounded-card-lg border border-border space-y-1">
-        <div className="flex items-center gap-2 text-text font-bold text-[13px]">
-          <ShieldIcon className="w-4 h-4 text-primary flex-shrink-0" />
-          <span>Bukan Nasihat Keuangan (Disclaimer)</span>
+      {/* Seksi Edukasi Finansial & Kaidah (Accordion dropdown per referensi Less is More) */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between px-1">
+          <span className="text-[12px] font-semibold text-text-secondary">
+            Panduan & Kaidah Finansial
+          </span>
+          <span className="text-[11px] text-text-secondary">
+            Sentuh untuk membaca
+          </span>
         </div>
-        <p className="text-[11px] text-text-secondary leading-relaxed">
-          Informasi yang disajikan di halaman ini bertujuan sebagai sarana edukasi dan referensi platform berizin. Seluruh keputusan dan risiko penempatan investasi berada sepenuhnya dalam kewenangan dan tanggung jawab pribadi Anda.
-        </p>
-      </div>
 
-      {/* Prinsip Edukasi Finansial Orisinal (Bahasa Sendiri, Bukan Kutipan Buku) */}
-      <div className="bg-surface p-4 rounded-card-lg border border-border space-y-2.5">
-        <div className="flex items-center gap-2">
-          <SparkleIcon className="w-4 h-4 text-primary" />
-          <h2 className="text-[14px] font-bold text-text">
-            3 Kaidah Menumbuhkan Dana Abadi
-          </h2>
-        </div>
-        <div className="space-y-2 text-[12px] text-text-secondary leading-relaxed">
-          <div className="p-2.5 bg-field rounded-control">
-            <strong className="text-text block mb-0.5">1. Mulai dari yang Rutin, Bukan yang Besar</strong>
-            Konsistensi menyisihkan sebagian kecil penghasilan di awal bulan jauh lebih berdampak daripada menunggu memiliki modal besar.
-          </div>
-          <div className="p-2.5 bg-field rounded-control">
-            <strong className="text-text block mb-0.5">2. Utamakan Legalitas dan Pengawasan Resmi</strong>
-            Pilihlah instrumen dan penyelenggara yang memiliki perizinan jelas dari regulator resmi (OJK / Bappebti) demi keamanan dana jangka panjang.
-          </div>
-          <div className="p-2.5 bg-field rounded-control">
-            <strong className="text-text block mb-0.5">3. Seimbangkan Risiko dengan Jangka Waktu</strong>
-            Gunakan instrumen berisiko rendah (pasar uang/SBN) untuk kebutuhan dana siaga, dan instrumen indeks/saham untuk target di atas 5–10 tahun.
-          </div>
-        </div>
+        <AccordionGroup>
+          {/* Kaidah 1 */}
+          <AccordionItem
+            id="kaidah-1"
+            title="1. Rutin Mengalahkan Besar"
+            subtitle="Konsistensi waktu vs modal awal"
+            icon={<SparkleIcon className="w-4 h-4" />}
+            defaultOpen={false}
+          >
+            <p>
+              Konsistensi menyisihkan sebagian kecil penghasilan di awal bulan jauh lebih berdampak daripada menunggu memiliki modal besar. Waktu di dalam pasar (<em>time in the market</em>) terbukti mengalahkan upaya menebak arah pasar (<em>market timing</em>).
+            </p>
+          </AccordionItem>
+
+          {/* Kaidah 2 */}
+          <AccordionItem
+            id="kaidah-2"
+            title="2. Utamakan Legalitas & Izin Resmi"
+            subtitle="Regulasi OJK & Bappebti demi keamanan dana"
+            icon={<ShieldIcon className="w-4 h-4" />}
+            defaultOpen={false}
+          >
+            <p>
+              Pilihlah instrumen dan penyelenggara yang memiliki perizinan jelas dari regulator resmi (OJK / Bappebti). Keamanan pokok jangka panjang jauh lebih utama daripada janji imbal hasil tidak wajar tanpa legalitas yang jelas.
+            </p>
+          </AccordionItem>
+
+          {/* Kaidah 3 */}
+          <AccordionItem
+            id="kaidah-3"
+            title="3. Seimbangkan Risiko & Waktu"
+            subtitle="Kesesuaian profil aset dengan target tahun"
+            icon={<TrendingUpIcon className="w-4 h-4" />}
+            defaultOpen={false}
+          >
+            <p>
+              Gunakan instrumen berisiko rendah dan likuid (seperti reksadana pasar uang atau SBN) untuk target jangka pendek, dan instrumen pertumbuhan (seperti indeks saham/reksadana saham) untuk target di atas 5–10 tahun.
+            </p>
+          </AccordionItem>
+
+          {/* Disclaimer & Batasan */}
+          <AccordionItem
+            id="kaidah-disclaimer"
+            title="Bukan Nasihat Keuangan (Disclaimer)"
+            subtitle="Informasi legalitas & tanggung jawab risiko"
+            badge={
+              <span className="px-1.5 py-0.5 bg-field text-text-secondary text-[10px] font-bold rounded">
+                Info
+              </span>
+            }
+            icon={<ShieldIcon className="w-4 h-4" />}
+            defaultOpen={false}
+          >
+            <p>
+              Informasi yang disajikan di halaman ini bertujuan sebagai sarana edukasi dan referensi platform berizin. Seluruh keputusan dan risiko penempatan investasi berada sepenuhnya dalam kewenangan dan tanggung jawab pribadi Anda.
+            </p>
+          </AccordionItem>
+        </AccordionGroup>
       </div>
 
       {/* Daftar Mitra Platform Investasi Terverifikasi */}
