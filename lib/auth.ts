@@ -8,8 +8,10 @@ export interface CurrentUser {
   name?: string | null;
 }
 
-// In-memory cache agar ensureUserAndDefaults tidak membebani database di setiap request
-const initializedUsers = new Set<string>();
+// In-memory cache persisten di globalThis agar ensureUserAndDefaults tidak membebani database di setiap request
+const globalForAuth = globalThis as unknown as { __initializedUsers?: Set<string> };
+const initializedUsers = globalForAuth.__initializedUsers ?? new Set<string>();
+if (process.env.NODE_ENV !== "production") globalForAuth.__initializedUsers = initializedUsers;
 
 /**
  * Memastikan user dan data dompet/kategori default sudah ada di database.

@@ -50,19 +50,27 @@ export async function GET(req: NextRequest) {
       endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999);
     }
 
-    // Ambil seluruh transaksi dalam rentang tanggal
-    const transactions = await prisma.transaction.findMany({
-      where: {
-        userId: user.id,
-        transactionDate: {
-          gte: startDate,
-          lte: endDate,
+    // Ambil transaksi dan utang aktif secara paralel dalam satu waktu
+    const [transactions, activeDebts] = await Promise.all([
+      prisma.transaction.findMany({
+        where: {
+          userId: user.id,
+          transactionDate: {
+            gte: startDate,
+            lte: endDate,
+          },
         },
-      },
-      include: {
-        category: true,
-      },
-    });
+        include: {
+          category: true,
+        },
+      }),
+      prisma.debt.findMany({
+        where: {
+          userId: user.id,
+          isPaidOff: false,
+        },
+      }),
+    ]);
 
     // 1. Agregasi pengeluaran per kategori
     const expenseMap = new Map<string, { name: string; amount: number }>();
@@ -115,26 +123,31 @@ export async function GET(req: NextRequest) {
       }))
       .sort((a, b) => b.amount - a.amount);
 
-    // 2. Kalender Heatmap untuk bulan target
+    // 2. Kalender Heatmap untuk bulan target (reuse transactions jika period === 'monthly' tanpa hit DB ulang!)
     const endOfTargetMonth = new Date(targetYear, targetMonth + 1, 0);
 
-    const monthTransactions = await prisma.transaction.findMany({
-      where: {
-        userId: user.id,
-        transactionDate: {
-          gte: new Date(targetYear, targetMonth, 1, 0, 0, 0),
-          lte: new Date(targetYear, targetMonth + 1, 0, 23, 59, 59),
-        },
-      },
-      select: {
-        amount: true,
-        transactionDate: true,
-      },
-    });
+    const monthTransactions =
+      period === "monthly"
+        ? transactions
+        : await prisma.transaction.findMany({
+            where: {
+              userId: user.id,
+              transactionDate: {
+                gte: new Date(targetYear, targetMonth, 1, 0, 0, 0),
+                lte: new Date(targetYear, targetMonth + 1, 0, 23, 59, 59),
+              },
+            },
+            select: {
+              amount: true,
+              transactionDate: true,
+            },
+          });
 
     const dayActivityMap = new Map<string, { count: number; totalAmount: number }>();
     for (const t of monthTransactions) {
-      const dateKey = t.transactionDate.toISOString().slice(0, 10);
+      const dateKey = (t.transactionDate instanceof Date ? t.transactionDate : new Date(t.transactionDate))
+        .toISOString()
+        .slice(0, 10);
       const curr = dayActivityMap.get(dateKey) || { count: 0, totalAmount: 0 };
       curr.count += 1;
       curr.totalAmount += Number(t.amount);
@@ -165,13 +178,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Kalkulasi Free Cash Flow (Bulanan) per PRD_ASET_UTANG §2.5:
-    // Total Pemasukan − Total Pengeluaran − Total monthlyPayment utang aktif
-    const activeDebts = await prisma.debt.findMany({
-      where: {
-        userId: user.id,
-        isPaidOff: false,
-      },
-    });
+    // Total Pemasukan − Total Pengeluaran − Total monthlyPayment utang aktif (sudah di-fetch di Promise.all)
 
     const totalMonthlyDebtPayments = activeDebts.reduce(
       (sum, d) => sum + (d.monthlyPayment !== null ? Number(d.monthlyPayment) : 0),

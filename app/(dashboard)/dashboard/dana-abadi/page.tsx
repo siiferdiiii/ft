@@ -14,8 +14,16 @@ import { DanaAbadiStatsDto } from "@/lib/types";
 export default function DanaAbadiPage() {
   const { wallets } = useAppData();
 
-  const [stats, setStats] = useState<DanaAbadiStatsDto | null>(null);
-  const [allocationPercent, setAllocationPercent] = useState<number>(10);
+  const [stats, setStats] = useState<DanaAbadiStatsDto | null>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("ft_cache_dana_abadi_stats");
+        if (cached) return JSON.parse(cached);
+      } catch {}
+    }
+    return null;
+  });
+  const [allocationPercent, setAllocationPercent] = useState<number>(() => stats?.perpetualFundPercent ?? 10);
   const [isSavingPercent, setIsSavingPercent] = useState(false);
   const [percentSuccessMsg, setPercentSuccessMsg] = useState<string | null>(null);
 
@@ -43,6 +51,11 @@ export default function DanaAbadiPage() {
         if (json.data) {
           setStats(json.data);
           setAllocationPercent(json.data.perpetualFundPercent ?? 10);
+          if (typeof window !== "undefined") {
+            try {
+              localStorage.setItem("ft_cache_dana_abadi_stats", JSON.stringify(json.data));
+            } catch {}
+          }
         }
       } catch (err) {
         console.warn("Gagal memuat statistik Dana Abadi:", err);

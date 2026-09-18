@@ -191,6 +191,8 @@ export interface NetWorthSummaryDto {
   totalDebtsRemaining: number;
   liquidCashT3: number;
   upcomingDebts: DebtDto[];
+  assets?: AssetDto[];
+  debts?: DebtDto[];
 }
 
 export interface FreeCashFlowDto {

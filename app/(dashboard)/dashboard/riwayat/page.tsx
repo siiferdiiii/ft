@@ -10,7 +10,7 @@ import { TransactionRow } from "@/components/features/TransactionRow";
 import Link from "next/link";
 
 export default function RiwayatPage() {
-  const { wallets, categories, refreshData } = useAppData();
+  const { wallets, categories, recentTransactions, refreshData } = useAppData();
 
   // State filter
   const [search, setSearch] = useState("");
@@ -22,20 +22,28 @@ export default function RiwayatPage() {
 
   const PAGE_SIZE = 30;
 
-  // Data state
-  const [transactions, setTransactions] = useState<TransactionDto[]>([]);
+  // Data state: 0ms instant display from cached recentTransactions
+  const [transactions, setTransactions] = useState<TransactionDto[]>(() => recentTransactions || []);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => (recentTransactions?.length || 0) === 0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+
+  // Sync recentTransactions if initial state was empty
+  useEffect(() => {
+    if (transactions.length === 0 && recentTransactions.length > 0 && !search && !filterWalletId && !filterCategoryId && !filterType && !dateFrom && !dateTo) {
+      setTransactions(recentTransactions);
+      setIsLoading(false);
+    }
+  }, [recentTransactions, transactions.length, search, filterWalletId, filterCategoryId, filterType, dateFrom, dateTo]);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchTransactions = useCallback(async (append = false) => {
     if (append) {
       setIsLoadingMore(true);
-    } else {
+    } else if (transactions.length === 0) {
       setIsLoading(true);
     }
     try {

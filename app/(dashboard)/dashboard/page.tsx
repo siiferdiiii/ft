@@ -68,8 +68,22 @@ export default function DashboardPage() {
         fetch("/api/net-worth"),
       ]);
       const [gJson, nwJson] = await Promise.all([gRes.json(), nwRes.json()]);
-      if (gJson.data) setGoals(gJson.data);
-      if (nwJson.data) setNetWorthData(nwJson.data);
+      if (gJson.data) {
+        setGoals(gJson.data);
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem("ft_cache_goals", JSON.stringify(gJson.data));
+          } catch {}
+        }
+      }
+      if (nwJson.data) {
+        setNetWorthData(nwJson.data);
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem("ft_cache_net_worth", JSON.stringify(nwJson.data));
+          } catch {}
+        }
+      }
     } catch {
       // Abaikan kendala fetch non-kritis
     }
@@ -77,6 +91,20 @@ export default function DashboardPage() {
 
   // Ambil pengaturan persentase alokasi & cache saran income aktif
   useEffect(() => {
+    // 0ms Instant cache hydration untuk goals & net worth
+    if (typeof window !== "undefined") {
+      try {
+        const cachedGoals = localStorage.getItem("ft_cache_goals");
+        if (cachedGoals) {
+          setGoals(JSON.parse(cachedGoals));
+        }
+        const cachedNw = localStorage.getItem("ft_cache_net_worth");
+        if (cachedNw) {
+          setNetWorthData(JSON.parse(cachedNw));
+        }
+      } catch {}
+    }
+
     const loadSettingsAndCache = async () => {
       try {
         const res = await fetch("/api/user/settings");

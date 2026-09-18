@@ -10,6 +10,8 @@ import { GoalDto } from "@/lib/types";
 import { formatCurrency } from "@/lib/currency";
 import { useAppData } from "@/lib/context/AppDataContext";
 
+const STORAGE_KEY_GOALS = "ft_cache_goals";
+
 export default function GoalsPage() {
   const { wallets, refreshData } = useAppData();
 
@@ -23,12 +25,37 @@ export default function GoalsPage() {
   const [quickSaveGoal, setQuickSaveGoal] = useState<GoalDto | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
 
+  // 1. Instant Hydration dari localStorage (0ms!)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem(STORAGE_KEY_GOALS);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) {
+            setGoals(parsed);
+            setIsLoading(false);
+          }
+        }
+      } catch {
+        // Abaikan cache rusak
+      }
+    }
+  }, []);
+
   const fetchGoals = useCallback(async () => {
     try {
       const res = await fetch("/api/goals");
       const json = await res.json();
-      if (json.data) {
+      if (json.data && Array.isArray(json.data)) {
         setGoals(json.data);
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem(STORAGE_KEY_GOALS, JSON.stringify(json.data));
+          } catch {
+            // Storage quota
+          }
+        }
       }
     } catch (err) {
       console.error("Gagal memuat daftar goal:", err);

@@ -37,21 +37,33 @@ export default function AsetUtangPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [nwRes, assetsRes, debtsRes] = await Promise.all([
-        fetch("/api/net-worth"),
-        fetch("/api/assets"),
-        fetch("/api/debts"),
-      ]);
+      const nwRes = await fetch("/api/net-worth");
+      const nwJson = await nwRes.json();
 
-      const [nwJson, assetsJson, debtsJson] = await Promise.all([
-        nwRes.json(),
-        assetsRes.json(),
-        debtsRes.json(),
-      ]);
-
-      if (nwJson.data) setNetWorthData(nwJson.data);
-      if (assetsJson.data) setAssets(assetsJson.data);
-      if (debtsJson.data) setDebts(debtsJson.data);
+      if (nwJson.data) {
+        setNetWorthData(nwJson.data);
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem("ft_cache_net_worth", JSON.stringify(nwJson.data));
+          } catch {}
+        }
+        if (nwJson.data.assets) {
+          setAssets(nwJson.data.assets);
+          if (typeof window !== "undefined") {
+            try {
+              localStorage.setItem("ft_cache_assets", JSON.stringify(nwJson.data.assets));
+            } catch {}
+          }
+        }
+        if (nwJson.data.debts) {
+          setDebts(nwJson.data.debts);
+          if (typeof window !== "undefined") {
+            try {
+              localStorage.setItem("ft_cache_debts", JSON.stringify(nwJson.data.debts));
+            } catch {}
+          }
+        }
+      }
     } catch (err) {
       console.error("Gagal memuat data aset & utang:", err);
     } finally {
@@ -60,6 +72,32 @@ export default function AsetUtangPage() {
   }, []);
 
   useEffect(() => {
+    // 0ms instant cache hydration
+    if (typeof window !== "undefined") {
+      try {
+        const cachedNw = localStorage.getItem("ft_cache_net_worth");
+        const cachedAssets = localStorage.getItem("ft_cache_assets");
+        const cachedDebts = localStorage.getItem("ft_cache_debts");
+        let hasCache = false;
+        if (cachedNw) {
+          setNetWorthData(JSON.parse(cachedNw));
+          hasCache = true;
+        }
+        if (cachedAssets) {
+          setAssets(JSON.parse(cachedAssets));
+          hasCache = true;
+        }
+        if (cachedDebts) {
+          setDebts(JSON.parse(cachedDebts));
+          hasCache = true;
+        }
+        if (hasCache) {
+          setIsLoading(false);
+        }
+      } catch (err) {
+        console.warn("Gagal membaca cache aset-utang:", err);
+      }
+    }
     fetchData();
   }, [fetchData]);
 

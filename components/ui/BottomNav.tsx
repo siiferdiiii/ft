@@ -57,6 +57,7 @@ export const BottomNav: React.FC = () => {
             id={item.id}
             key={item.href}
             href={item.href}
+            prefetch={true}
             aria-current={item.active ? "page" : undefined}
             className={`flex-1 flex flex-col items-center justify-center gap-1.5 py-1.5 min-h-[48px] rounded-full transition-all duration-150 active:scale-95 select-none ${
               item.active

@@ -8,26 +8,25 @@ export async function GET() {
     const user = await getCurrentUser();
     if (!user) return apiError("UNAUTHORIZED", "Silakan login terlebih dahulu", 401);
 
-    // Ambil semua dompet aktif (termasuk goal dan dana abadi — uang riil user)
-    const wallets = await prisma.wallet.findMany({
-      where: {
-        userId: user.id,
-        isArchived: false,
-      },
-    });
+    // Ambil semua dompet, aset, dan utang secara paralel (3x lebih cepat)
+    const [wallets, assets, debts] = await Promise.all([
+      prisma.wallet.findMany({
+        where: { userId: user.id, isArchived: false },
+      }),
+      prisma.asset.findMany({
+        where: { userId: user.id, isArchived: false },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.debt.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
 
     const totalWalletsBalance = wallets.reduce(
       (sum, w) => sum + Number(w.balance),
       0
     );
-
-    // Ambil semua aset aktif
-    const assets = await prisma.asset.findMany({
-      where: {
-        userId: user.id,
-        isArchived: false,
-      },
-    });
 
     const totalAssetsValue = assets.reduce(
       (sum, a) => sum + Number(a.value),
@@ -40,13 +39,6 @@ export async function GET() {
       assets
         .filter((a) => a.liquidityTier === "INSTANT" || a.liquidityTier === "T3")
         .reduce((sum, a) => sum + Number(a.value), 0);
-
-    // Ambil utang aktif
-    const debts = await prisma.debt.findMany({
-      where: {
-        userId: user.id,
-      },
-    });
 
     const activeDebts = debts.filter((d) => !d.isPaidOff && Number(d.remainingBalance) > 0);
 
@@ -89,6 +81,29 @@ export async function GET() {
       }
     }
 
+    const assetDtos = assets.map((a) => ({
+      id: a.id,
+      name: a.name,
+      category: a.category,
+      value: Number(a.value),
+      liquidityTier: a.liquidityTier,
+      lastValuationAt: a.lastValuationAt.toISOString(),
+      isArchived: a.isArchived,
+      createdAt: a.createdAt.toISOString(),
+    }));
+
+    const debtDtos = debts.map((d) => ({
+      id: d.id,
+      name: d.name,
+      principal: Number(d.principal),
+      remainingBalance: Number(d.remainingBalance),
+      monthlyPayment: d.monthlyPayment !== null ? Number(d.monthlyPayment) : null,
+      dueDayOfMonth: d.dueDayOfMonth,
+      interestRate: d.interestRate !== null ? Number(d.interestRate) : null,
+      isPaidOff: d.isPaidOff,
+      createdAt: d.createdAt.toISOString(),
+    }));
+
     const summary: NetWorthSummaryDto = {
       netWorth,
       totalWalletsBalance,
@@ -96,6 +111,8 @@ export async function GET() {
       totalDebtsRemaining,
       liquidCashT3,
       upcomingDebts,
+      assets: assetDtos,
+      debts: debtDtos,
     };
 
     return apiSuccess(summary);
