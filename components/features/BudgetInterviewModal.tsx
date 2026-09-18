@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/Button";
-import { formatCurrencyInput, parseCurrencyInput } from "@/lib/currency";
+import { formatCurrency, formatCurrencyInput, parseCurrencyInput } from "@/lib/currency";
 import { CategoryDto } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -16,6 +16,13 @@ interface ProposedBudget {
   categoryId: string;
   categoryName: string;
   amount: number;
+}
+
+interface AllocationSummary {
+  totalExpenseBudget: number;
+  proposedPerpetualAmount: number | null;
+  savingsAllocation: number | null;
+  savingsRecommendationNote: string | null;
 }
 
 // State machine: INTRO → TALKING → PROPOSING → CONFIRMING → DONE
@@ -108,6 +115,7 @@ export const BudgetInterviewModal: React.FC<BudgetInterviewModalProps> = ({
   const [proposedBudgets, setProposedBudgets] = useState<ProposedBudget[]>([]);
   const [proposedPercent, setProposedPercent] = useState<number>(perpetualFundPercent);
   const [editedBudgets, setEditedBudgets] = useState<Record<string, string>>({}); // categoryId -> formatted string
+  const [allocationSummary, setAllocationSummary] = useState<AllocationSummary | null>(null);
   const [incomeHint, setIncomeHint] = useState<number | undefined>(undefined);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -125,6 +133,7 @@ export const BudgetInterviewModal: React.FC<BudgetInterviewModalProps> = ({
       setTextInput("");
       setProposedBudgets([]);
       setEditedBudgets({});
+      setAllocationSummary(null);
       setIncomeHint(undefined);
       setProposedPercent(perpetualFundPercent);
       turnCountRef.current = 0;
@@ -197,7 +206,16 @@ export const BudgetInterviewModal: React.FC<BudgetInterviewModalProps> = ({
         return;
       }
 
-      const { reply, proposedBudgets: proposed, proposedPerpetualPercent, done } = json.data;
+      const {
+        reply,
+        proposedBudgets: proposed,
+        proposedPerpetualPercent,
+        totalExpenseBudget,
+        proposedPerpetualAmount,
+        savingsAllocation,
+        savingsRecommendationNote,
+        done,
+      } = json.data;
 
       // Tambah balasan AI ke riwayat percakapan
       const modelMsg: ChatMessage = { role: "model", content: reply };
@@ -208,6 +226,13 @@ export const BudgetInterviewModal: React.FC<BudgetInterviewModalProps> = ({
       if (done && Array.isArray(proposed) && proposed.length > 0) {
         setProposedBudgets(proposed);
         if (proposedPerpetualPercent) setProposedPercent(proposedPerpetualPercent);
+        setAllocationSummary({
+          totalExpenseBudget:
+            totalExpenseBudget ?? proposed.reduce((s: number, b: ProposedBudget) => s + (Number(b.amount) || 0), 0),
+          proposedPerpetualAmount: proposedPerpetualAmount ?? null,
+          savingsAllocation: savingsAllocation ?? null,
+          savingsRecommendationNote: savingsRecommendationNote ?? null,
+        });
         // Pre-fill edited budgets dengan angka dari AI
         const initialEdits: Record<string, string> = {};
         for (const b of proposed) {
@@ -537,28 +562,87 @@ export const BudgetInterviewModal: React.FC<BudgetInterviewModalProps> = ({
           )}
 
           {/* ── PHASE: PROPOSING ── */}
-          {phase === "PROPOSING" && (
+          {phase === "PROPOSING" && (() => {
+            const currentTotalExpense = proposedBudgets.reduce((sum, b) => {
+              const val = parseCurrencyInput(editedBudgets[b.categoryId] ?? String(b.amount));
+              return sum + (isNaN(val) ? 0 : val);
+            }, 0);
+            const isUnder2Million = currentTotalExpense < 2000000;
+
+            return (
             <div className="flex-1 flex flex-col min-h-0">
               <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-                <div className="bg-chip rounded-[16px] px-4 py-3">
-                  <p className="text-[12px] text-primary font-semibold mb-1">Usulan Budget Bulananan</p>
-                  <p className="text-[12px] text-text-secondary">
-                    Kamu bisa ubah angkanya langsung di bawah sebelum konfirmasi.
-                  </p>
+                {/* Header Card: Target Pengeluaran < 2 Juta & Alokasi Sisa */}
+                <div className="bg-surface border border-border rounded-[18px] p-4 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[12px] font-semibold text-text-secondary">
+                      Total Anggaran Pengeluaran
+                    </span>
+                    <span
+                      className={`text-[10.5px] font-bold px-2 py-0.5 rounded-full ${
+                        isUnder2Million
+                          ? "bg-income/10 text-income"
+                          : "bg-amber-500/10 text-amber-600"
+                      }`}
+                    >
+                      {isUnder2Million ? "✓ Di bawah 2 Juta (Hemat & Disiplin)" : "⚠️ Melebihi Rp 2.000.000"}
+                    </span>
+                  </div>
+
+                  <div className="flex items-baseline justify-between border-b border-border/70 pb-3">
+                    <span className="text-[22px] font-bold text-text">
+                      {formatCurrency(currentTotalExpense)}
+                    </span>
+                    <span className="text-[11px] text-text-secondary">
+                      {proposedBudgets.length} pos kategori kebutuhan
+                    </span>
+                  </div>
+
+                  {/* Rencana Alokasi Sisa Uang (Dana Abadi + Tabungan / Dana Darurat) */}
+                  <div className="space-y-2 pt-0.5">
+                    <span className="text-[11px] font-bold text-primary uppercase tracking-wider block">
+                      Rencana Alokasi Sisa Uang
+                    </span>
+
+                    <div className="grid grid-cols-2 gap-2 text-[12px]">
+                      {/* Dana Abadi */}
+                      <div className="p-2.5 bg-field/70 rounded-control border border-border/60">
+                        <span className="text-[10px] text-text-secondary block mb-0.5">
+                          Dana Abadi ({proposedPercent}%)
+                        </span>
+                        <span className="font-bold text-text block truncate">
+                          {allocationSummary?.proposedPerpetualAmount
+                            ? formatCurrency(allocationSummary.proposedPerpetualAmount)
+                            : `${proposedPercent}% dari income`}
+                        </span>
+                      </div>
+
+                      {/* Tabungan / Dana Darurat */}
+                      <div className="p-2.5 bg-income/5 rounded-control border border-income/20">
+                        <span className="text-[10px] text-income font-semibold block mb-0.5 truncate">
+                          Tabungan / Dana Darurat
+                        </span>
+                        <span className="font-bold text-income block truncate">
+                          {allocationSummary?.savingsAllocation
+                            ? formatCurrency(allocationSummary.savingsAllocation)
+                            : "Sisa uang simpanan"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {allocationSummary?.savingsRecommendationNote && (
+                      <p className="text-[11px] text-text-secondary leading-snug italic pt-1">
+                        💡 {allocationSummary.savingsRecommendationNote}
+                      </p>
+                    )}
+                  </div>
                 </div>
 
-                {/* Dana Abadi section jika persentase berubah */}
-                {proposedPercent !== perpetualFundPercent && (
-                  <div className="bg-surface border border-border rounded-[16px] px-4 py-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[13px] font-semibold text-text">Dana Abadi</span>
-                      <span className="text-[12px] font-medium text-primary">{proposedPercent}% dari income</span>
-                    </div>
-                    <p className="text-[11px] text-text-secondary">
-                      Persentase berubah dari {perpetualFundPercent}% → {proposedPercent}%
-                    </p>
-                  </div>
-                )}
+                {/* Subtitle Rincian Kategori */}
+                <div className="flex items-center justify-between pt-1 px-1">
+                  <span className="text-[12px] font-semibold text-text">Rincian Batas Per Kategori</span>
+                  <span className="text-[11px] text-text-secondary">Bisa diedit manual</span>
+                </div>
 
                 {/* Kartu per kategori */}
                 {proposedBudgets.map((b) => (
@@ -611,7 +695,8 @@ export const BudgetInterviewModal: React.FC<BudgetInterviewModalProps> = ({
                 </Button>
               </div>
             </div>
-          )}
+            );
+          })()}
 
           {/* ── PHASE: CONFIRMING ── */}
           {phase === "CONFIRMING" && (

@@ -28,19 +28,22 @@ AI menanyakan gaji/pendapatan dan kondisi keuangan user (cicilan, tanggungan, ds
 2. AI tanya kategori mana yang paling banyak menghabiskan uang (jawaban bebas, mis. "makan di luar" atau "transportasi").
 3. AI tanya income/pendapatan bulanan.
 
-**Langkah 4 — Arahan Dana Abadi:**
-- [ ] AI **mengarahkan** (bukan cuma menawarkan pasif) user untuk menyisihkan 10% dari income ke Dana Abadi untuk masa depan — reuse narasi "bayar diri sendiri" yang sudah dispek di `PRD_DANA_ABADI.md`. Kalau user sudah punya `perpetualFundPercent` custom (bukan default 10%), AI pakai angka itu, bukan hardcode 10%.
-- [ ] User bisa setuju atau minta ubah persentase di titik ini — kalau diubah, ini juga yang jadi nilai baru `User.perpetualFundPercent` (dikonfirmasi dulu di langkah akhir, bukan langsung tersimpan).
+**Langkah 4 — Strategi Anggaran Hemat & Arahan Dana Abadi:**
+- [ ] AI mengarahkan user bahwa anggaran pengeluaran bulanan akan didesain hemat & terkendali di bawah Rp 2.000.000 (< 2 juta rupiah total per bulan).
+- [ ] AI **mengarahkan** user untuk menyisihkan persentase dari income ke Dana Abadi untuk masa depan (default 10%, atau sesuai `User.perpetualFundPercent` custom). User bisa setuju atau minta ubah persentase di titik ini.
 
-**Langkah 5 — Tabungan tambahan (di luar Dana Abadi):**
-- [ ] AI tanya berapa jumlah **tambahan** yang ingin ditabung, terpisah dari alokasi Dana Abadi 10% tadi (mis. nabung buat beli barang tertentu, dana liburan, dst — bukan dana abadi jangka panjang).
-- [ ] Nominal ini dicatat sebagai bagian dari alokasi (mengurangi sisa yang akan dibagi ke kategori pengeluaran di langkah 6), tapi **tidak otomatis membuat dompet/kategori baru** — hanya jadi angka pengurang saat kalkulasi, user yang nanti memutuskan mau taruh di dompet mana lewat flow biasa.
+**Langkah 5 — Tabungan Bertujuan (Goals) & Dana Darurat dari Sisa Uang:**
+- [ ] Dari total penghasilan, setelah dikurangi total anggaran pengeluaran (< 2 juta) dan alokasi Dana Abadi, seluruh **sisa uang yang masih ada** dialokasikan ke **Tabungan (Goals aktif pengguna)** atau ke **Dana Darurat**.
+- [ ] AI membaca konteks daftar Goals aktif milik user (mis. "Beli Motor", "Laptop", dll). Jika belum ada Goal, AI menyarankan pembagian ke pos Dana Darurat untuk perlindungan finansial.
 
-**Langkah 6 — Susun budget per kategori:**
-- [ ] Sisa uang (income − alokasi Dana Abadi − tabungan tambahan) dibagi ke kategori pengeluaran yang **sudah ada di akun user** (tidak membuat kategori baru), dengan bobot lebih besar ke kategori yang disebut user paling banyak menghabiskan uang di Langkah 2.
-- [ ] AI ajukan usulan angka per kategori — dibacakan ringkas + ditampilkan visual per kategori (kartu, bukan cuma suara).
-- [ ] User bisa minta revisi lewat suara ("kategori makan terlalu kecil, naikkan") — AI sesuaikan dan ajukan ulang.
-- [ ] User konfirmasi final → baru `Category.budgetLimit` per kategori (dan `User.perpetualFundPercent` kalau berubah) diupdate sekaligus. **Tidak ada auto-apply di tengah percakapan**, hanya di langkah konfirmasi akhir ini.
+**Langkah 6 — Susun budget per kategori (Aturan ketat Total Pengeluaran < 2 Juta):**
+- [ ] **ATURAN UTAMA**: Total seluruh usulan budget pengeluaran bulanan (jumlah semua kategori yang diusulkan) HARUS DI BAWAH Rp 2.000.000 (< 2 juta rupiah), dibagi secara realistis & proporsional ke kategori pengeluaran yang sudah ada di akun user (skala prioritas: Pokok/Rutin > Pendukung > Hiburan).
+- [ ] AI ajukan usulan angka per kategori beserta visualisasi ringkasan:
+  - Total Pengeluaran (< 2 Juta)
+  - Alokasi Dana Abadi
+  - Alokasi Tabungan / Dana Darurat dari sisa uang
+- [ ] User bisa minta revisi lewat suara/teks atau mengubah nominal langsung di input card sebelum konfirmasi final.
+- [ ] User konfirmasi final → baru `Category.budgetLimit` per kategori (dan `User.perpetualFundPercent` kalau berubah) diupdate sekaligus ke database. **Tidak ada auto-apply di tengah percakapan**.
 
 - [ ] Percakapan dibatasi maksimal (mis. 10 putaran, disesuaikan karena flow ini sudah 6 langkah inti + revisi) — kalau belum selesai, AI wajib mengarah ke kesimpulan/usulan, bukan terus bertanya tanpa akhir (kontrol biaya & UX).
 - [ ] Selama percakapan berlangsung, riwayat percakapan disimpan **sementara di state client/session saja** — tidak ditulis ke database sebagai log lengkap, sesuai disclaimer di Langkah 0 (konsisten dengan keputusan sebelumnya di `PRD_AI_BUDGET_VOICE.md` bagian 3).
