@@ -87,6 +87,157 @@ function speakText(text: string): void {
   window.speechSynthesis.speak(utterance);
 }
 
+// ─── Komponen Renderer Pesan Rapi ─────────────────────────────────────────────
+
+/**
+ * Mengonversi teks AI (dengan format markdown ringan) menjadi elemen React terstruktur.
+ * Mendukung: **tebal**, daftar bernomor, daftar bullet, dan jeda paragraf.
+ */
+function FormattedChatMessage({ content, onReplay }: { content: string; onReplay?: () => void }) {
+  // Normalisasi: jika AI menggabungkan nomor di tengah kalimat, pisahkan ke baris baru
+  // Contoh: "...masa depan: 1. **Sisihkan..." → "...masa depan:\n\n1. **Sisihkan..."
+  const normalized = content
+    .replace(/([.:!?])\s*(\d+\.\s+\*\*)/g, "$1\n\n$2")
+    .replace(/([.:!?])\s*(\d+\.\s+(?=[A-Z]))/g, "$1\n\n$2");
+
+  // Split menjadi blok berdasarkan baris kosong ganda
+  const blocks = normalized.split(/\n{2,}/).filter((b) => b.trim());
+
+  const renderInline = (text: string): React.ReactNode[] => {
+    // Parse **bold** dan nominal Rp
+    const parts: React.ReactNode[] = [];
+    const regex = /(\*\*(.+?)\*\*)/g;
+    let lastIndex = 0;
+    let match;
+
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(text.slice(lastIndex, match.index));
+      }
+      parts.push(
+        <strong key={match.index} className="font-semibold text-text">
+          {match[2]}
+        </strong>
+      );
+      lastIndex = regex.lastIndex;
+    }
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex));
+    }
+    return parts;
+  };
+
+  const elements: React.ReactNode[] = [];
+
+  for (let bi = 0; bi < blocks.length; bi++) {
+    const block = blocks[bi].trim();
+
+    // Cek apakah blok ini adalah daftar bernomor (1. ... / 2. ...)
+    const numberedMatch = block.match(/^(\d+)\.\s+([\s\S]+)/);
+    if (numberedMatch) {
+      const num = numberedMatch[1];
+      const body = numberedMatch[2].trim();
+      elements.push(
+        <div key={`n-${bi}`} className="flex items-start gap-2.5 py-1">
+          <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/15 text-primary text-[11px] font-bold flex items-center justify-center mt-0.5">
+            {num}
+          </span>
+          <span className="text-[13px] leading-relaxed flex-1">
+            {renderInline(body)}
+          </span>
+        </div>
+      );
+      continue;
+    }
+
+    // Cek apakah blok mengandung beberapa baris bernomor
+    const lines = block.split(/\n/).filter((l) => l.trim());
+    const allNumbered = lines.length > 1 && lines.every((l) => /^\d+\.\s+/.test(l.trim()));
+    if (allNumbered) {
+      for (let li = 0; li < lines.length; li++) {
+        const lineMatch = lines[li].trim().match(/^(\d+)\.\s+(.+)/);
+        if (lineMatch) {
+          elements.push(
+            <div key={`nl-${bi}-${li}`} className="flex items-start gap-2.5 py-1">
+              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/15 text-primary text-[11px] font-bold flex items-center justify-center mt-0.5">
+                {lineMatch[1]}
+              </span>
+              <span className="text-[13px] leading-relaxed flex-1">
+                {renderInline(lineMatch[2].trim())}
+              </span>
+            </div>
+          );
+        }
+      }
+      continue;
+    }
+
+    // Cek apakah blok ini adalah bullet list (- ... atau • ...)
+    const bulletLines = block.split(/\n/).filter((l) => l.trim());
+    const allBullets = bulletLines.length > 1 && bulletLines.every((l) => /^\s*[-•]\s+/.test(l));
+    if (allBullets) {
+      for (let li = 0; li < bulletLines.length; li++) {
+        const bulletBody = bulletLines[li].replace(/^\s*[-•]\s+/, "").trim();
+        elements.push(
+          <div key={`b-${bi}-${li}`} className="flex items-start gap-2 py-0.5">
+            <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-primary/40 mt-[7px]" />
+            <span className="text-[13px] leading-relaxed flex-1">
+              {renderInline(bulletBody)}
+            </span>
+          </div>
+        );
+      }
+      continue;
+    }
+
+    // Cek apakah blok adalah satu baris bullet tunggal
+    const singleBullet = block.match(/^\s*[-•]\s+(.+)/);
+    if (singleBullet) {
+      elements.push(
+        <div key={`sb-${bi}`} className="flex items-start gap-2 py-0.5">
+          <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-primary/40 mt-[7px]" />
+          <span className="text-[13px] leading-relaxed flex-1">
+            {renderInline(singleBullet[1].trim())}
+          </span>
+        </div>
+      );
+      continue;
+    }
+
+    // Paragraf biasa — render inline single-line breaks as <br>
+    const paraLines = block.split(/\n/);
+    elements.push(
+      <p key={`p-${bi}`} className="text-[13px] leading-relaxed">
+        {paraLines.map((line, li) => (
+          <React.Fragment key={li}>
+            {li > 0 && <br />}
+            {renderInline(line)}
+          </React.Fragment>
+        ))}
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {elements}
+      {onReplay && (
+        <button
+          type="button"
+          onClick={onReplay}
+          className="mt-1 flex items-center gap-1 text-[11px] text-text-secondary hover:text-primary transition-colors"
+          aria-label="Putar ulang suara"
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3 2.5v7l6-3.5-6-3.5z" fill="currentColor"/>
+          </svg>
+          Putar ulang
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ─── Komponen Utama ────────────────────────────────────────────────────────────
 
 export const BudgetInterviewModal: React.FC<BudgetInterviewModalProps> = ({
@@ -442,27 +593,54 @@ export const BudgetInterviewModal: React.FC<BudgetInterviewModalProps> = ({
           {phase === "TALKING" && (
             <div className="flex-1 flex flex-col min-h-0">
               {/* Chat area */}
-              <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+              <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
                 {messages.map((msg, i) => (
                   <div
                     key={i}
-                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} gap-2`}
                   >
+                    {/* Avatar Fin untuk pesan AI */}
+                    {msg.role === "model" && (
+                      <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center mt-1">
+                        <svg width="14" height="14" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <rect x="6" y="10" width="20" height="14" rx="4" fill="#4E44E5" opacity="0.15"/>
+                          <rect x="10" y="6" width="12" height="8" rx="3" fill="#4E44E5"/>
+                          <circle cx="13" cy="10" r="1.5" fill="white"/>
+                          <circle cx="19" cy="10" r="1.5" fill="white"/>
+                        </svg>
+                      </div>
+                    )}
+
                     <div
-                      className={`max-w-[82%] px-4 py-2.5 rounded-[18px] text-[13px] leading-relaxed ${
+                      className={`max-w-[78%] px-4 py-3 rounded-[18px] ${
                         msg.role === "user"
-                          ? "bg-primary text-white rounded-br-[6px]"
+                          ? "bg-primary text-white rounded-br-[6px] text-[13px] leading-relaxed"
                           : "bg-field text-text rounded-bl-[6px]"
                       }`}
                     >
-                      {msg.content}
+                      {msg.role === "user" ? (
+                        msg.content
+                      ) : (
+                        <FormattedChatMessage
+                          content={msg.content}
+                          onReplay={() => speakText(msg.content)}
+                        />
+                      )}
                     </div>
                   </div>
                 ))}
 
                 {/* Loading dots saat AI thinking */}
                 {isAiLoading && (
-                  <div className="flex justify-start">
+                  <div className="flex justify-start gap-2">
+                    <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center mt-1">
+                      <svg width="14" height="14" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="6" y="10" width="20" height="14" rx="4" fill="#4E44E5" opacity="0.15"/>
+                        <rect x="10" y="6" width="12" height="8" rx="3" fill="#4E44E5"/>
+                        <circle cx="13" cy="10" r="1.5" fill="white"/>
+                        <circle cx="19" cy="10" r="1.5" fill="white"/>
+                      </svg>
+                    </div>
                     <div className="bg-field px-4 py-3 rounded-[18px] rounded-bl-[6px] flex items-center gap-1.5">
                       <span className="w-2 h-2 bg-text-secondary rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
                       <span className="w-2 h-2 bg-text-secondary rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
@@ -473,6 +651,25 @@ export const BudgetInterviewModal: React.FC<BudgetInterviewModalProps> = ({
 
                 <div ref={chatEndRef} />
               </div>
+
+              {/* Banner jika usulan budget sudah ada (misal setelah klik 'Minta Revisi') */}
+              {proposedBudgets.length > 0 && (
+                <div className="mx-4 mb-2 p-2.5 bg-primary/10 border border-primary/20 rounded-[14px] flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-sm flex-shrink-0">✨</span>
+                    <span className="text-[12px] font-medium text-primary truncate">
+                      Rancangan anggaran siap ditinjau
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPhase("PROPOSING")}
+                    className="text-[11px] font-bold text-primary hover:underline px-2.5 py-1 bg-surface rounded-lg shadow-xs flex-shrink-0"
+                  >
+                    Lihat Rancangan →
+                  </button>
+                </div>
+              )}
 
               {/* Error banner */}
               {errorMsg && (

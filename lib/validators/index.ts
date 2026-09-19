@@ -101,7 +101,7 @@ export const budgetInterviewSchema = z.object({
     .array(
       z.object({
         role: z.enum(["user", "model"]),
-        content: z.string().min(1).max(2000, "Pesan terlalu panjang"),
+        content: z.string().min(1).max(5000, "Pesan terlalu panjang"),
       })
     )
     .min(0)

@@ -6,6 +6,57 @@ import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { callGeminiWithFailover, getGeminiApiKeys } from "@/lib/gemini";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 
+/**
+ * Auto-repair JSON yang terpotong (output Gemini habis sebelum selesai).
+ * Menghapus trailing koma, key tanpa value, dan menutup bracket/brace yang belum tertutup.
+ */
+function autoRepairJson(raw: string): string {
+  let s = raw.trim();
+
+  // Hapus trailing comma sebelum penutup atau di akhir
+  s = s.replace(/,\s*$/, "");
+
+  // Jika terputus di tengah string value (ada kutip ganjil), tutup kutipnya
+  // Hitung kutip ganda yang tidak di-escape
+  const quoteCount = (s.match(/(?<!\\)"/g) || []).length;
+  if (quoteCount % 2 !== 0) {
+    // Hapus dari kutip terakhir yang ganjil sampai akhir, lalu tutup
+    s = s.replace(/"[^"]*$/, '""');
+  }
+
+  // Hapus trailing key tanpa value (mis: "categoryName": ) di akhir
+  s = s.replace(/,?\s*"[^"]*"\s*:\s*$/, "");
+
+  // Hapus objek terakhir yang tidak lengkap di dalam array
+  // Pattern: ,{ ... tanpa penutup }
+  s = s.replace(/,\s*\{[^}]*$/, "");
+
+  // Hapus trailing comma lagi setelah pembersihan
+  s = s.replace(/,\s*$/, "");
+
+  // Hitung bracket dan brace yang belum ditutup
+  let openBraces = 0;
+  let openBrackets = 0;
+  let inString = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '"' && (i === 0 || s[i - 1] !== "\\")) {
+      inString = !inString;
+    } else if (!inString) {
+      if (ch === "{") openBraces++;
+      else if (ch === "}") openBraces--;
+      else if (ch === "[") openBrackets++;
+      else if (ch === "]") openBrackets--;
+    }
+  }
+
+  // Tutup yang belum tertutup
+  while (openBrackets > 0) { s += "]"; openBrackets--; }
+  while (openBraces > 0) { s += "}"; openBraces--; }
+
+  return s;
+}
+
 // Endpoint POST: terima riwayat percakapan multi-turn, kirim ke Gemini, return balasan AI.
 // State percakapan tidak disimpan ke DB - hanya ada di client session (sesuai PRD §2.2).
 export async function POST(req: NextRequest): Promise<Response> {
@@ -105,12 +156,26 @@ ALUR WAWANCARA KEUANGAN (Ikuti urutan langkah berikut secara bijak, ajukan 1 per
    - Hitung sisa uang (Penghasilan − Total Anggaran Pengeluaran − Alokasi Dana Abadi) dan tetapkan secara eksplisit sebagai alokasi Tabungan / Dana Darurat.
    - Berikan ulasan hangat, motivasi, dan ajukan usulan angka per kategori.
 
+ATURAN FORMAT PENULISAN (WAJIB DIIKUTI):
+- Tulis paragraf PENDEK, maksimal 2-3 kalimat per paragraf.
+- SELALU sisipkan BARIS KOSONG (\n\n) antar paragraf agar tidak menumpuk.
+- Jika menggunakan daftar bernomor (1., 2., dst), WAJIB taruh SETIAP nomor di BARIS BARU TERPISAH. Contoh:
+
+1. **Poin pertama** — penjelasan singkat.
+
+2. **Poin kedua** — penjelasan singkat.
+
+- Jika menggunakan poin bullet (- atau •), taruh SETIAP bullet di BARIS BARU TERPISAH.
+- Gunakan **teks tebal** untuk menyoroti istilah penting, nama kategori, dan nominal uang.
+- JANGAN PERNAH menggabungkan beberapa poin bernomor dalam satu paragraf panjang tanpa jeda baris.
+
 ATURAN PENTING:
 - Bertanyalah satu topik secara runtut per putaran. Jangan gabungkan 2 pertanyaan berat sekaligus.
 - Bersikaplah bijak, empati, dan suportif.
 - Tetap di koridor anggaran keuangan pribadi. Tolak pertanyaan spekulasi investasi berisiko atau pinjaman online.
 - Gunakan bahasa Indonesia yang santun, hangat, dan mudah dipahami.
-- Saat kamu siap mengajukan usulan budget FINAL di langkah 5, sertakan blok JSON ini di akhir responmu:
+- JANGAN PERNAH menyebutkan kata "JSON", "blok kode", "format data", atau istilah teknis apapun dalam kalimat percakapanmu. Blok data hanya lampiran teknis internal, bukan bagian dari percakapan.
+- Saat kamu siap mengajukan usulan budget FINAL di langkah 5, TULIS DULU rangkuman narasi rencana anggaran secara lengkap dan rapi, lalu SETELAH narasi selesai, LAMPIRKAN blok JSON berikut di BARIS PALING AKHIR responmu (terpisah dari narasi):
 \`\`\`json
 {
   "proposedBudgets": [
@@ -144,7 +209,7 @@ ATURAN PENTING:
       })),
       generationConfig: {
         temperature: 0.7,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 3072,
         thinkingConfig: { thinkingBudget: 0 },
       },
     };
@@ -191,10 +256,32 @@ ATURAN PENTING:
     let savingsRecommendationNote: string | null = null;
     let done = false;
 
-    const jsonMatch = rawReply.match(/```json\s*([\s\S]*?)```/);
-    if (jsonMatch?.[1]) {
+    // Ekstraksi JSON yang fail-safe: mendukung blok tertutup maupun terpotong
+    // 1) Coba blok ```json ... ``` yang lengkap
+    // 2) Jika tidak ada, coba blok ```json ... (tanpa penutup — output terpotong)
+    // 3) Jika masih tidak ada, coba cari objek JSON mentah { "proposedBudgets": ... }
+    let jsonRaw: string | null = null;
+    const closedMatch = rawReply.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (closedMatch?.[1]) {
+      jsonRaw = closedMatch[1].trim();
+    } else {
+      const openMatch = rawReply.match(/```(?:json)?\s*([\s\S]+)$/);
+      if (openMatch?.[1]) {
+        jsonRaw = openMatch[1].trim();
+      } else {
+        // Fallback: cari objek JSON mentah yang mengandung proposedBudgets
+        const bareMatch = rawReply.match(/(\{[\s\S]*"proposedBudgets"[\s\S]*)/)
+        if (bareMatch?.[1]) {
+          jsonRaw = bareMatch[1].trim();
+        }
+      }
+    }
+
+    if (jsonRaw) {
+      // Auto-repair JSON terpotong: tutup array/objek yang belum tertutup
+      const repaired = autoRepairJson(jsonRaw);
       try {
-        const jsonData = JSON.parse(jsonMatch[1].trim());
+        const jsonData = JSON.parse(repaired);
         if (Array.isArray(jsonData.proposedBudgets)) {
           proposedBudgets = jsonData.proposedBudgets;
           proposedPerpetualPercent = jsonData.proposedPerpetualPercent ?? null;
@@ -211,12 +298,18 @@ ATURAN PENTING:
           done = Boolean(jsonData.done);
         }
       } catch {
-        // Blok JSON tidak valid - abaikan, lanjut percakapan biasa
+        // JSON masih tidak valid setelah repair — abaikan, lanjut percakapan biasa
+        console.warn("[Budget Interview] JSON repair failed, raw:", jsonRaw.slice(0, 200));
       }
     }
 
-    // Hapus blok JSON dari teks yang ditampilkan ke user agar rapi
-    const displayReply = rawReply.replace(/```json[\s\S]*?```/g, "").trim();
+    // Hapus SELURUH artefak JSON dari teks yang ditampilkan ke user
+    // Mencakup: ```json...```, ```json...(terpotong), dan objek JSON mentah
+    let displayReply = rawReply
+      .replace(/```(?:json)?[\s\S]*?```/g, "")  // blok tertutup
+      .replace(/```(?:json)?[\s\S]*$/g, "")      // blok terbuka (terpotong)
+      .replace(/\{[\s\S]*"proposedBudgets"[\s\S]*/g, "") // JSON mentah tanpa fence
+      .trim();
 
     return apiSuccess({
       reply: displayReply,
