@@ -105,10 +105,56 @@ export interface StatisticsDto {
     intensity: 0 | 1 | 2 | 3 | 4;
   }>;
   freeCashFlow?: FreeCashFlowDto;
+  weeklyNetWorthGrowth?: WeeklyNetWorthGrowthDto;
+  financialHealth?: FinancialHealthMetricsDto;
   monthLabel?: string;
   monthOffset?: number;
   hasNextMonth?: boolean;
   hasPrevMonth?: boolean;
+}
+
+export interface WeeklyNetWorthPoint {
+  weekIndex: number;          // 1 .. 8
+  weekLabel: string;          // "M1", "M2" or "8-14 Sep"
+  shortLabel: string;         // e.g. "8 Sep"
+  startDate: string;          // YYYY-MM-DD
+  endDate: string;            // YYYY-MM-DD
+  formattedDateRange: string; // "8 Sep – 14 Sep 2026"
+  walletsBalance: number;     // Saldo kas dompet pada akhir minggu ini
+  assetsValue: number;        // Nilai aset non-kas pada akhir minggu ini
+  totalAssets: number;        // walletsBalance + assetsValue
+  debtsRemaining: number;     // Total utang aktif pada akhir minggu ini
+  netWorth: number;           // totalAssets - debtsRemaining
+  wowNetWorthChange: number;  // Perubahan net worth vs minggu sebelumnya (+/-)
+  wowNetWorthPercent: number; // % perubahan net worth vs minggu sebelumnya
+  wowTotalAssetsChange: number; // Perubahan total aset vs minggu sebelumnya (+/-)
+}
+
+export interface WeeklyNetWorthGrowthDto {
+  history: WeeklyNetWorthPoint[];
+  currentNetWorth: number;
+  currentTotalAssets: number;
+  currentTotalDebts: number;
+  currentWalletsBalance: number;
+  currentAssetsValue: number;
+  latestWoWNetWorthDiff: number;
+  latestWoWNetWorthPercent: number;
+  latestWoWAssetsDiff: number;
+  latestWoWAssetsPercent: number;
+  debtToAssetRatio: number; // in percent (0 - 100)
+}
+
+export interface FinancialHealthMetricsDto {
+  savingsRate: number; // in percent (-100 to 100)
+  savingsRateStatus: "EXCELLENT" | "GOOD" | "FAIR" | "LOW" | "DEFICIT";
+  netCashFlow: number; // totalIncome - totalExpense
+  dailyAverageExpense: number;
+  totalTransactionsCount: number;
+  expenseTransactionCount: number;
+  averageExpensePerTransaction: number;
+  debtToAssetRatio: number;
+  debtToIncomeRatio: number; // in percent
+  liquidCashT3: number;
 }
 
 export interface MonthlyBalanceGrowthPoint {

@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { DonutRingChart, HeatmapCalendar } from "@/components/features/StatisticsCharts";
+import { WeeklyNetWorthChart } from "@/components/features/WeeklyNetWorthChart";
+import { FinancialHealthScorecard } from "@/components/features/FinancialHealthScorecard";
 import { BottomNav } from "@/components/ui/BottomNav";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { StatisticsDto, TransactionType } from "@/lib/types";
@@ -19,6 +21,15 @@ export default function StatisticsPage() {
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
 
+  // Label bulan yang dihitung sinkron langsung dari monthOffset agar judul bulan instan & tidak pernah glitch
+  const targetDate = new Date();
+  targetDate.setDate(1);
+  targetDate.setMonth(targetDate.getMonth() + monthOffset);
+  const computedMonthLabel = targetDate.toLocaleDateString("id-ID", {
+    month: "long",
+    year: "numeric",
+  });
+
   // Reset slide animation setelah selesai
   useEffect(() => {
     if (slideDirection) {
@@ -28,7 +39,9 @@ export default function StatisticsPage() {
   }, [slideDirection]);
 
   useEffect(() => {
-    const cacheKey = `ft_stats_${period}_${monthOffset}`;
+    let isCancelled = false;
+    const controller = new AbortController();
+    const cacheKey = `ft_stats_v2_${period}_${monthOffset}`;
     let hasCacheHit = false;
 
     // 1. Cek cache lokal untuk bulan yang DITUJU
@@ -37,46 +50,68 @@ export default function StatisticsPage() {
       if (cached) {
         try {
           const parsed = JSON.parse(cached);
-          setStats(parsed);
-          setIsLoading(false);
-          hasCacheHit = true;
+          if (parsed && parsed.weeklyNetWorthGrowth) {
+            setStats(parsed);
+            setIsLoading(false);
+            hasCacheHit = true;
+          }
         } catch {
           // Abaikan cache rusak
         }
       }
     }
 
-    // 2. Jika tidak ada cache → hapus data lama agar tidak flash data bulan sebelumnya
+    // 2. Jika tidak ada cache → kosongkan data agar tidak menampilkan data bulan lain
     if (!hasCacheHit) {
       setStats(null);
       setIsLoading(true);
     }
 
-    // 3. Sinkronisasi latar belakang (selalu fetch data segar)
+    // 3. Sinkronisasi latar belakang dengan pencegahan race condition
     const fetchStats = async () => {
       try {
         const res = await fetch(
-          `/api/statistics?period=${period}&monthOffset=${monthOffset}`
+          `/api/statistics?period=${period}&monthOffset=${monthOffset}`,
+          { signal: controller.signal }
         );
+        if (!res.ok) return;
         const json = await res.json();
-        if (json.data) {
+
+        // Cegah race condition: pastikan request belum dibatalkan dan respon benar-benar milik offset yang sedang aktif
+        if (
+          !isCancelled &&
+          !controller.signal.aborted &&
+          json.data &&
+          (json.data.monthOffset === undefined || json.data.monthOffset === monthOffset)
+        ) {
           setStats(json.data);
           if (typeof window !== "undefined") {
             try {
               localStorage.setItem(cacheKey, JSON.stringify(json.data));
             } catch {
-              // Storage quota
+              // Storage quota safe
             }
           }
         }
-      } catch (err) {
+      } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          // Normal: fetch dibatalkan karena pengguna berpindah bulan dengan cepat
+          return;
+        }
         console.error("Gagal memuat statistik:", err);
       } finally {
-        setIsLoading(false);
+        if (!isCancelled && !controller.signal.aborted) {
+          setIsLoading(false);
+        }
       }
     };
 
     fetchStats();
+
+    return () => {
+      isCancelled = true;
+      controller.abort();
+    };
   }, [period, monthOffset]);
 
   const handlePrevMonth = () => {
@@ -178,7 +213,7 @@ export default function StatisticsPage() {
         <div className="flex flex-col items-center">
           <div className="flex items-center gap-2">
             <span className="text-[15px] font-bold text-text">
-              {stats?.monthLabel || "Memuat..."}
+              {computedMonthLabel}
             </span>
             {monthOffset !== 0 && (
               <span className="px-1.5 py-0.5 rounded-md bg-chip text-primary text-[10px] font-bold">
@@ -263,9 +298,15 @@ export default function StatisticsPage() {
           </button>
         </div>
 
+        {/* Indikator Finansial Lengkap (Savings Rate, Burn Rate, Solvabilitas, dll) */}
+        <FinancialHealthScorecard
+          data={stats?.financialHealth}
+          isLoading={isLoading}
+        />
+
         {/* Donut Chart Pengeluaran & Pemasukan (Merged) */}
         <DonutRingChart
-          title={`${chartType === "EXPENSE" ? "Pengeluaran" : "Pemasukan"} (${stats?.monthLabel || ""})`}
+          title={`${chartType === "EXPENSE" ? "Pengeluaran" : "Pemasukan"} (${computedMonthLabel})`}
           total={
             chartType === "EXPENSE"
               ? stats?.totalExpense || 0
@@ -336,6 +377,12 @@ export default function StatisticsPage() {
         {stats?.calendarHeatmap && (
           <HeatmapCalendar heatmap={stats.calendarHeatmap} />
         )}
+
+        {/* Bagian Paling Bawah: Grafik Pertumbuhan Net Worth dan Total Aset Mingguan */}
+        <WeeklyNetWorthChart
+          data={stats?.weeklyNetWorthGrowth}
+          isLoading={isLoading}
+        />
       </div>
 
       <BottomNav />
