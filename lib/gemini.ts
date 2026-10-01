@@ -2,9 +2,13 @@
  * Helper untuk manajemen multi-key Google Gemini API.
  * Mendukung Round-Robin Load Balancing dan Automatic Failover jika terkena rate-limit (429)
  * atau key tidak valid / error server.
+ * Mendukung exponential backoff untuk error 503 (overload sementara).
  */
 
 let currentKeyIndex = 0;
+
+/** Delay helper */
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * Mengambil array API keys dari environment variable.
@@ -75,50 +79,82 @@ export async function callGeminiWithFailover(
     const maskedKey = apiKey.length > 10 ? `${apiKey.slice(0, 6)}...${apiKey.slice(-4)}` : "(key pendek)";
 
     for (const model of candidateModels) {
-      try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
+      // Retry up to 2 kali untuk 503 (overload sementara) dengan exponential backoff
+      const MAX_RETRIES = 2;
+      let attempt = 0;
+      let skipToNextModel = false;
 
-        if (!res.ok) {
-          const errText = await res.text().catch(() => "");
-          lastStatus = res.status;
+      while (attempt <= MAX_RETRIES) {
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+          const res = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
 
-          // Jika model tidak ditemukan / deprecated (404), coba model berikutnya pada key ini
-          if (res.status === 404 && candidateModels.length > 1) {
+          if (!res.ok) {
+            const errText = await res.text().catch(() => "");
+            lastStatus = res.status;
+
+            // 404: model deprecated/tidak tersedia → coba model berikutnya
+            if (res.status === 404) {
+              console.warn(
+                `[Gemini Rotation] Model ${model} pada Key #${i + 1} (${maskedKey}) mengembalikan 404. Mencoba model berikutnya...`
+              );
+              skipToNextModel = true;
+              break;
+            }
+
+            // 503: overload sementara → retry dengan backoff sebelum coba model lain
+            if (res.status === 503 && attempt < MAX_RETRIES) {
+              const delay = 1000 * Math.pow(2, attempt); // 1s, 2s
+              console.warn(
+                `[Gemini Rotation] Key #${i + 1} (${maskedKey}) model ${model} overload (503). Retry ke-${attempt + 1} setelah ${delay}ms...`
+              );
+              all429 = false;
+              await sleep(delay);
+              attempt++;
+              continue;
+            }
+
+            errors.push(`Key #${i + 1} (${model}): HTTP ${res.status}`);
             console.warn(
-              `[Gemini Rotation] Model ${model} pada Key #${i + 1} (${maskedKey}) mengembalikan 404 (tidak tersedia). Mencoba fallback model berikutnya...`
+              `[Gemini Rotation] Key #${i + 1} (${maskedKey}) model ${model} gagal dengan status ${res.status}:`,
+              errText
             );
-            continue;
+
+            if (res.status !== 429) {
+              all429 = false;
+            }
+
+            // 503 habis retry atau error lain → coba model berikutnya pada key ini
+            if (res.status === 503) {
+              skipToNextModel = true;
+              break;
+            }
+
+            // Selain 503/404 → pindah ke API key berikutnya
+            break;
           }
 
-          errors.push(`Key #${i + 1} (${model}): HTTP ${res.status}`);
-          console.warn(
-            `[Gemini Rotation] Key #${i + 1} (${maskedKey}) model ${model} gagal dengan status ${res.status}:`,
-            errText
-          );
-
-          if (res.status !== 429) {
-            all429 = false;
-          }
-
-          // Jika bukan 404, pindah ke API key berikutnya
+          // Respon sukses (200 OK)
+          const data = await res.json();
+          return { res, status: res.status, allQuotaExceeded: false, data };
+        } catch (err) {
+          console.error(`[Gemini Rotation] Exception saat fetch dengan key #${i + 1} (${maskedKey}) model ${model}:`, err);
+          all429 = false;
+          lastStatus = 500;
+          errors.push(`Key #${i + 1} (${maskedKey}): Exception ${String(err).slice(0, 100)}`);
           break;
         }
 
-        // Respon sukses (200 OK)
-        const data = await res.json();
-        return { res, status: res.status, allQuotaExceeded: false, data };
-      } catch (err) {
-        console.error(`[Gemini Rotation] Exception saat fetch dengan key #${i + 1} (${maskedKey}) model ${model}:`, err);
-        all429 = false;
-        lastStatus = 500;
-        errors.push(`Key #${i + 1} (${maskedKey}): Exception ${String(err).slice(0, 100)}`);
-        break;
+        break; // keluar dari while jika tidak ada continue
       }
+
+      if (skipToNextModel) continue; // lanjut ke model berikutnya
+      // Jika bukan skipToNextModel, keluar dari for-model → coba key berikutnya
+      break;
     }
   }
 
