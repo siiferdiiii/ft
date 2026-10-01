@@ -69,7 +69,8 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 3. Ekstrak User Code atau User ID dari catatan pembelian (notes / custom fields)
+    // 3. Ekstrak User Code atau User ID dari catatan pembelian, additional questions, atau seluruh payload
+    const rawPayloadString = JSON.stringify(payload);
     const allNoteStrings = [
       payload.notes,
       payload.note,
@@ -77,16 +78,20 @@ export async function POST(req: NextRequest) {
       payload.customer_notes,
       payload.custom_field,
       payload.custom_fields,
+      payload.additional_question,
+      payload.additional_questions,
+      payload.answers,
       payload.description,
       payload.data?.notes,
       payload.data?.note,
       payload.data?.customer_note,
-      JSON.stringify(payload.custom_fields || {}),
+      payload.data?.additional_questions,
+      rawPayloadString,
     ]
       .filter(Boolean)
       .join(" ");
 
-    // Cari pola User Code (misal: FT-84920 atau FT-XXXXX)
+    // Cari pola User Code (misal: FT-84920 atau FT-47D92)
     const userCodeMatch = allNoteStrings.match(/FT-[A-Z0-9]{4,10}/i);
     const userCode = userCodeMatch ? userCodeMatch[0].toUpperCase() : null;
 
@@ -111,22 +116,31 @@ export async function POST(req: NextRequest) {
     }
 
     // Fallback: cek jika email customer dikirimkan oleh Lynk.id
-    if (!user && (payload.customer_email || payload.email || payload.data?.customer_email)) {
-      const email = payload.customer_email || payload.email || payload.data?.customer_email;
+    const customerEmail =
+      payload.customer_email ||
+      payload.buyer_email ||
+      payload.email ||
+      payload.data?.customer_email ||
+      payload.data?.buyer_email ||
+      payload.data?.email ||
+      payload.customer?.email ||
+      payload.data?.customer?.email;
+
+    if (!user && customerEmail) {
       user = await prisma.user.findUnique({
-        where: { email },
+        where: { email: String(customerEmail).trim().toLowerCase() },
       });
     }
 
     if (!user) {
       console.warn(
-        `[Lynk.id Webhook] User tidak ditemukan untuk order ${orderId}. Catatan: "${allNoteStrings}"`
+        `[Lynk.id Webhook] User tidak ditemukan untuk order ${orderId}. Payload: ${rawPayloadString}`
       );
       return NextResponse.json(
         {
           error: {
             code: "USER_NOT_FOUND",
-            message: `User tidak ditemukan dari catatan "${allNoteStrings}". Harap cantumkan User Code (mis. FT-XXXXX).`,
+            message: `User tidak ditemukan dari catatan / ID. Harap cantumkan User Code (mis. FT-XXXXX) atau gunakan email yang sama.`,
           },
         },
         { status: 400 }
