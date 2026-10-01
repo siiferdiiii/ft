@@ -31,6 +31,11 @@ export interface ParsedMultiReceiptResult {
   merchant: string | null;
   transactionDate: string;
   totalAmount: number;
+  subtotal?: number;
+  discount?: number;
+  tax?: number;
+  serviceFee?: number;
+  discountNotes?: string | null;
   items: ParsedMultiReceiptItem[];
   receiptImageUrl: string;
   remainingQuota: number;
@@ -110,35 +115,65 @@ export async function POST(req: NextRequest) {
     const categoryListContext = userCategories.map((c) => ({ id: c.id, name: c.name }));
 
     // 5. Panggil Google Gemini Vision AI untuk ekstraksi multi-item
-    const systemPrompt = `Kamu adalah asisten keuangan cerdas yang mengekstrak rincian struk belanja/resi multi-transaksi di Indonesia.
+    const systemPrompt = `Kamu adalah asisten akuntansi cerdas yang mengekstrak rincian struk belanja/resi multi-transaksi di Indonesia.
 Tugasmu:
 1. Baca gambar struk belanja dengan teliti.
-2. Ekstrak nama toko/merchant (misal: "Indomaret", "Superindo", "Apotek K-24").
+2. Ekstrak nama toko/merchant (misal: "Indomaret", "Superindo", "Alfamart", "Apotek K-24").
 3. Ekstrak tanggal transaksi (format YYYY-MM-DD). Jika tidak ditemukan atau buram, gunakan tanggal hari ini.
-4. Ekstrak SELURUH daftar item produk yang dibeli beserta harga masing-masing.
-5. Cocokkan setiap item produk ke salah satu ID kategori pengguna yang paling relevan dari daftar berikut:
+4. ATURAN PENTING HARGA ITEM & DISKON:
+   - Jika suatu produk mendapatkan diskon langsung (misal ada baris "DISKON FRISIAN FLAG : (1.300)" untuk item "FF LOW FAT VAN 225" seharga 5.200), hitung harga item sebagai HARGA BERSIH SETELAH DISKON: 5.200 - 1.300 = 3.900, dan beri catatan pada nama produk jika perlu.
+   - Jika ada kantong plastik/item gratis karena diskon 100% (misal "PLASTIK SDG 1" dengan "DISKON (1)"), JANGAN masukkan ke daftar item belanja.
+   - Jika ada pajak (PPN/PB1), biaya layanan, atau ongkir yang tertera di struk, masukkan sebagai item tersendiri (misal: "Pajak PPN 11%", "Biaya Layanan") agar saldo dompet berkurang sesuai total struk.
+5. Ekstrak ringkasan biaya:
+   - "subtotal": total harga kotor sebelum diskon (misal 35200).
+   - "discount": total potongan/diskon jika ada (misal 1300).
+   - "tax": total pajak jika ada (0 jika tidak ada).
+   - "serviceFee": total biaya layanan/kantong jika ada (0 jika tidak ada).
+   - "totalAmount": TOTAL AKHIR BERSIH YANG DIBAYAR OLEH PELANGGAN (angka pada baris "TOTAL : Rp ...", misal 33900).
+   - "discountNotes": catatan ringkas diskon atau biaya lainnya (misal: "Hemat Rp 1.300 (Diskon Frisian Flag)").
+6. Pastikan: JUMLAH SELURUH HARGA PADA "items" HARUS SAMA PERSIS DENGAN "totalAmount" (total akhir yang dibayar).
+7. Cocokkan setiap item produk ke salah satu ID kategori pengguna yang paling relevan dari daftar berikut:
 ${JSON.stringify(categoryListContext)}
 Jika tidak ada kategori yang cocok, set suggestedCategoryId ke null dan suggestedCategoryName sesuai tebakanmu.
 
-Format output HARUS HANYA JSON murni tanpa markdown/backticks/kutipan tambahan:
+Format output HARUS HANYA JSON murni:
 {
-  "merchant": "Nama Toko",
+  "merchant": "Indomaret",
   "transactionDate": "YYYY-MM-DD",
-  "totalAmount": 125000,
+  "subtotal": 35200,
+  "discount": 1300,
+  "tax": 0,
+  "serviceFee": 0,
+  "totalAmount": 33900,
+  "discountNotes": "Hemat Rp 1.300 (Diskon Frisian Flag)",
   "items": [
     {
-      "name": "Beras Ramos 5kg",
-      "amount": 75000,
-      "quantity": 1,
-      "suggestedCategoryId": "id_dari_daftar_atau_null",
-      "suggestedCategoryName": "Bahan Makanan"
+      "name": "S/ROTI KRIM KEJU 72G",
+      "amount": 18000,
+      "quantity": 4,
+      "suggestedCategoryId": "...",
+      "suggestedCategoryName": "Makanan & Minuman"
     },
     {
-      "name": "Minyak Goreng 2L",
-      "amount": 35000,
+      "name": "CIMORY MIX BERRY 225",
+      "amount": 8500,
       "quantity": 1,
-      "suggestedCategoryId": "id_dari_daftar_atau_null",
-      "suggestedCategoryName": "Bahan Makanan"
+      "suggestedCategoryId": "...",
+      "suggestedCategoryName": "Makanan & Minuman"
+    },
+    {
+      "name": "CAFELA EXPRESO 200ML",
+      "amount": 3500,
+      "quantity": 1,
+      "suggestedCategoryId": "...",
+      "suggestedCategoryName": "Makanan & Minuman"
+    },
+    {
+      "name": "FF LOW FAT VAN 225",
+      "amount": 3900,
+      "quantity": 1,
+      "suggestedCategoryId": "...",
+      "suggestedCategoryName": "Makanan & Minuman"
     }
   ]
 }`;
@@ -201,6 +236,11 @@ Format output HARUS HANYA JSON murni tanpa markdown/backticks/kutipan tambahan:
       merchant?: string;
       transactionDate?: string;
       totalAmount?: number;
+      subtotal?: number;
+      discount?: number;
+      tax?: number;
+      serviceFee?: number;
+      discountNotes?: string;
       items?: Array<{
         name: string;
         amount: number;
@@ -273,6 +313,26 @@ Format output HARUS HANYA JSON murni tanpa markdown/backticks/kutipan tambahan:
         ? parsedJson.totalAmount
         : totalSum;
 
+    const subtotal =
+      typeof parsedJson.subtotal === "number" && parsedJson.subtotal > 0
+        ? parsedJson.subtotal
+        : totalSum;
+
+    let discount =
+      typeof parsedJson.discount === "number" && parsedJson.discount > 0
+        ? parsedJson.discount
+        : 0;
+
+    let discountNotes = parsedJson.discountNotes || null;
+
+    // Jika total kotor barang lebih besar dari total bayar akhir, deteksi otomatis sebagai diskon
+    if (totalSum > calculatedTotal && discount === 0) {
+      discount = totalSum - calculatedTotal;
+      if (!discountNotes) {
+        discountNotes = `Hemat Rp ${discount.toLocaleString("id-ID")} (Diskon / Promo)`;
+      }
+    }
+
     // Buat data URI gambar untuk preview
     const previewDataUrl = `data:${mimeType};base64,${base64Data}`;
 
@@ -283,6 +343,11 @@ Format output HARUS HANYA JSON murni tanpa markdown/backticks/kutipan tambahan:
           ? parsedJson.transactionDate
           : new Date().toISOString(),
       totalAmount: calculatedTotal,
+      subtotal,
+      discount,
+      tax: typeof parsedJson.tax === "number" ? parsedJson.tax : 0,
+      serviceFee: typeof parsedJson.serviceFee === "number" ? parsedJson.serviceFee : 0,
+      discountNotes,
       items,
       receiptImageUrl: previewDataUrl,
       remainingQuota: updatedUser.ocrQuota,

@@ -19,6 +19,11 @@ export interface MultiReceiptResult {
   merchant: string | null;
   transactionDate: string;
   totalAmount: number;
+  subtotal?: number;
+  discount?: number;
+  tax?: number;
+  serviceFee?: number;
+  discountNotes?: string | null;
   items: MultiReceiptItem[];
   receiptImageUrl: string;
   remainingQuota: number;
@@ -48,6 +53,7 @@ export const AiReceiptScannerModal: React.FC<AiReceiptScannerModalProps> = ({
   const [result, setResult] = useState<MultiReceiptResult | null>(null);
   const [items, setItems] = useState<MultiReceiptItem[]>([]);
   const [merchant, setMerchant] = useState("");
+  const [groupNote, setGroupNote] = useState("");
   const [txDate, setTxDate] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -63,6 +69,7 @@ export const AiReceiptScannerModal: React.FC<AiReceiptScannerModalProps> = ({
     setResult(null);
     setItems([]);
     setMerchant("");
+    setGroupNote("");
     setTxDate("");
     onClose();
   };
@@ -79,7 +86,7 @@ export const AiReceiptScannerModal: React.FC<AiReceiptScannerModalProps> = ({
       const formData = new FormData();
       formData.append("file", file);
 
-      setProgress("Membaca rincian struk dengan AI... (10-20 detik)");
+      setProgress("Membaca rincian struk & diskon dengan AI... (10-20 detik)");
       const res = await fetch("/api/receipts/parse-multi", {
         method: "POST",
         body: formData,
@@ -102,6 +109,18 @@ export const AiReceiptScannerModal: React.FC<AiReceiptScannerModalProps> = ({
         new Date(data.transactionDate).toISOString().split("T")[0] ||
           new Date().toISOString().split("T")[0]
       );
+
+      // Pre-fill catatan grup dengan info diskon atau nama merchant
+      let initialNote = "";
+      if (data.discountNotes) {
+        initialNote = data.discountNotes;
+      } else if (data.discount && data.discount > 0) {
+        initialNote = `Hemat ${formatCurrency(data.discount)} (Diskon / Promo)`;
+      } else if (data.merchant) {
+        initialNote = `Belanja di ${data.merchant}`;
+      }
+      setGroupNote(initialNote);
+
       // Initialize items with suggestedCategoryId filled in
       setItems(
         data.items.map((item) => ({
@@ -129,7 +148,7 @@ export const AiReceiptScannerModal: React.FC<AiReceiptScannerModalProps> = ({
         body: JSON.stringify({
           walletId: activeWalletId,
           merchant: merchant || null,
-          note: merchant ? `Belanja di ${merchant}` : "Belanja Multi-Item",
+          note: groupNote || (merchant ? `Belanja di ${merchant}` : "Belanja Multi-Item"),
           receiptImageUrl: result.receiptImageUrl || null,
           transactionDate: txDate ? new Date(txDate).toISOString() : new Date().toISOString(),
           items: items.map((item) => ({
@@ -161,6 +180,12 @@ export const AiReceiptScannerModal: React.FC<AiReceiptScannerModalProps> = ({
     );
   };
 
+  const updateItemName = (idx: number, name: string) => {
+    setItems((prev) =>
+      prev.map((item, i) => (i === idx ? { ...item, name } : item))
+    );
+  };
+
   const updateItemAmount = (idx: number, amount: string) => {
     const parsed = parseInt(amount.replace(/[^0-9]/g, ""), 10);
     if (!isNaN(parsed)) {
@@ -174,7 +199,67 @@ export const AiReceiptScannerModal: React.FC<AiReceiptScannerModalProps> = ({
     setItems((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  const addItem = () => {
+    setItems((prev) => [
+      ...prev,
+      {
+        name: "Item / Biaya Tambahan",
+        amount: 0,
+        quantity: 1,
+        suggestedCategoryId: null,
+        suggestedCategoryName: null,
+        categoryId: expenseCategories[0]?.id || null,
+      },
+    ]);
+  };
+
+  // Helper untuk menyeimbangkan selisih diskon agar total item sama persis dengan total bayar struk
+  const autoBalanceDiscount = () => {
+    if (!result || items.length === 0) return;
+    const targetTotal = result.totalAmount;
+    const currentSum = items.reduce((s, it) => s + it.amount, 0);
+    const diff = currentSum - targetTotal;
+
+    if (diff <= 0) return;
+
+    let updated = [...items];
+
+    // 1. Cek apakah ada kantong plastik atau item kecil (<= Rp 100) yang digratiskan
+    const plasticIdx = updated.findIndex(
+      (it) => it.name.toLowerCase().includes("plastik") && it.amount <= 100
+    );
+    if (plasticIdx !== -1) {
+      updated.splice(plasticIdx, 1);
+    }
+
+    const newSum = updated.reduce((s, it) => s + it.amount, 0);
+    const remainingDiff = newSum - targetTotal;
+
+    if (remainingDiff > 0) {
+      // 2. Cari item yang namanya mengandung kata diskon atau item termahal
+      const candidateIdx = updated.findIndex((it) => it.amount > remainingDiff);
+      if (candidateIdx !== -1) {
+        updated[candidateIdx] = {
+          ...updated[candidateIdx],
+          amount: updated[candidateIdx].amount - remainingDiff,
+        };
+      } else {
+        // Distribusi proporsional
+        const ratio = targetTotal / newSum;
+        updated = updated.map((it) => ({
+          ...it,
+          amount: Math.max(1, Math.round(it.amount * ratio)),
+        }));
+      }
+    }
+
+    setItems(updated);
+  };
+
   const totalItems = items.reduce((sum, item) => sum + item.amount, 0);
+  const targetPaid = result?.totalAmount || totalItems;
+  const hasDiscrepancy = result && Math.abs(totalItems - targetPaid) > 0;
+  const detectedDiscount = result?.discount || (result && totalItems > targetPaid ? totalItems - targetPaid : 0);
 
   return (
     <BottomSheet isOpen={isOpen} onClose={handleClose} title="Scan Resi AI Multi-Item">
@@ -219,7 +304,7 @@ export const AiReceiptScannerModal: React.FC<AiReceiptScannerModalProps> = ({
                 <div>
                   <h3 className="text-[16px] font-bold text-text mb-1">Scan Struk dengan AI</h3>
                   <p className="text-[12px] text-text-secondary max-w-xs mx-auto">
-                    AI akan membaca seluruh item produk, harga, nama toko, dan menyarankan kategori secara otomatis.
+                    AI akan membaca seluruh item produk, harga bersih setelah diskon, nama toko, dan menyarankan kategori otomatis.
                   </p>
                 </div>
               </div>
@@ -250,30 +335,101 @@ export const AiReceiptScannerModal: React.FC<AiReceiptScannerModalProps> = ({
                 </div>
               )}
 
-              {/* Merchant & Tanggal */}
+              {/* Banner Info Diskon / Promo */}
+              {detectedDiscount > 0 && (
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-card-lg text-[12px] text-emerald-600 dark:text-emerald-400 flex items-start gap-2.5">
+                  <span className="text-[16px]">🎉</span>
+                  <div className="flex-1">
+                    <div className="font-bold">Diskon / Promo Terdeteksi: Hemat {formatCurrency(detectedDiscount)}</div>
+                    <div className="text-[11px] opacity-90 mt-0.5">
+                      {result.discountNotes || "Struk belanja ini mendapatkan potongan harga atau diskon promo."}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Merchant, Tanggal, & Catatan Grup */}
               <div className="bg-surface rounded-card-lg border border-border p-4 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-medium text-text-secondary block mb-1.5">
+                      Nama Toko / Merchant
+                    </label>
+                    <input
+                      value={merchant}
+                      onChange={(e) => setMerchant(e.target.value)}
+                      placeholder="Indomaret, dsb..."
+                      className="w-full bg-field text-text text-[13px] px-3 py-2 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-medium text-text-secondary block mb-1.5">
+                      Tanggal Transaksi
+                    </label>
+                    <input
+                      type="date"
+                      value={txDate}
+                      onChange={(e) => setTxDate(e.target.value)}
+                      className="w-full bg-field text-text text-[13px] px-3 py-2 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none"
+                    />
+                  </div>
+                </div>
+
                 <div>
-                  <label className="text-[11px] font-medium text-text-secondary block mb-1.5">
-                    Nama Toko / Merchant
+                  <label className="text-[11px] font-medium text-text-secondary block mb-1.5 flex items-center justify-between">
+                    <span>Catatan Grup & Info Biaya Lain</span>
+                    <span className="text-[10px] text-text-secondary font-normal">Diskon / Pajak / Memo</span>
                   </label>
                   <input
-                    value={merchant}
-                    onChange={(e) => setMerchant(e.target.value)}
-                    placeholder="Indomaret, Superindo, dsb..."
+                    value={groupNote}
+                    onChange={(e) => setGroupNote(e.target.value)}
+                    placeholder="Contoh: Hemat Rp 1.300 (Promo Frisian Flag)..."
                     className="w-full bg-field text-text text-[13px] px-3 py-2 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none"
                   />
                 </div>
-                <div>
-                  <label className="text-[11px] font-medium text-text-secondary block mb-1.5">
-                    Tanggal Transaksi
-                  </label>
-                  <input
-                    type="date"
-                    value={txDate}
-                    onChange={(e) => setTxDate(e.target.value)}
-                    className="w-full bg-field text-text text-[13px] px-3 py-2 rounded-control border-none focus:ring-2 focus:ring-primary focus:outline-none"
-                  />
+              </div>
+
+              {/* Ringkasan Biaya Struk */}
+              <div className="bg-surface rounded-card-lg border border-border p-3.5 space-y-2">
+                <div className="flex items-center justify-between text-[12px] text-text-secondary">
+                  <span>Subtotal Barang ({items.length} item)</span>
+                  <span className="font-semibold text-text">{formatCurrency(totalItems)}</span>
                 </div>
+                {detectedDiscount > 0 && (
+                  <div className="flex items-center justify-between text-[12px] text-emerald-600 dark:text-emerald-400">
+                    <span>Diskon / Potongan</span>
+                    <span className="font-semibold">-{formatCurrency(detectedDiscount)}</span>
+                  </div>
+                )}
+                <div className="pt-2 border-t border-border flex items-center justify-between">
+                  <div>
+                    <span className="text-[13px] font-bold text-text">Total Bayar (Struk)</span>
+                    <p className="text-[10px] text-text-secondary">Saldo dompet akan berkurang sebesar ini</p>
+                  </div>
+                  <span className="text-[16px] font-black text-expense">
+                    {formatCurrency(totalItems)}
+                  </span>
+                </div>
+
+                {/* Tombol Rekonsiliasi Diskon jika total item belum dipotong diskon */}
+                {hasDiscrepancy && (
+                  <div className="mt-2 pt-2 border-t border-dashed border-border flex flex-col gap-2">
+                    <div className="text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                      <span>⚠️</span>
+                      <span>
+                        Total item ({formatCurrency(totalItems)}) berbeda dari total bayar struk ({formatCurrency(targetPaid)}).
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={autoBalanceDiscount}
+                      className="w-full py-1.5 px-3 bg-primary/10 hover:bg-primary/20 text-primary text-[11px] font-bold rounded-control transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      <span>✨</span>
+                      <span>Sesuaikan Diskon Otomatis ke Item</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Daftar Item */}
@@ -282,16 +438,26 @@ export const AiReceiptScannerModal: React.FC<AiReceiptScannerModalProps> = ({
                   <p className="text-[12px] font-bold text-text-secondary uppercase tracking-wide">
                     Rincian Item ({items.length})
                   </p>
-                  <p className="text-[12px] font-semibold text-expense">
-                    Total: {formatCurrency(totalItems)}
-                  </p>
+                  <button
+                    type="button"
+                    onClick={addItem}
+                    className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1"
+                  >
+                    <span>+</span>
+                    <span>Tambah Item</span>
+                  </button>
                 </div>
                 <div className="space-y-2">
                   {items.map((item, idx) => (
                     <div key={idx} className="bg-surface rounded-card-lg border border-border p-3.5">
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <div className="flex-1 min-w-0">
-                          <p className="text-[13px] font-semibold text-text truncate">{item.name}</p>
+                          <input
+                            value={item.name}
+                            onChange={(e) => updateItemName(idx, e.target.value)}
+                            placeholder="Nama item..."
+                            className="w-full bg-transparent text-[13px] font-semibold text-text border-b border-transparent hover:border-border focus:border-primary focus:outline-none py-0.5 truncate"
+                          />
                           {item.suggestedCategoryName && item.categoryId === item.suggestedCategoryId && (
                             <p className="text-[10px] text-primary mt-0.5">
                               💡 AI sarankan: {item.suggestedCategoryName}
@@ -300,14 +466,14 @@ export const AiReceiptScannerModal: React.FC<AiReceiptScannerModalProps> = ({
                         </div>
                         <button
                           onClick={() => removeItem(idx)}
-                          className="text-expense text-[11px] font-semibold flex-shrink-0 hover:opacity-70"
+                          className="text-expense text-[11px] font-semibold flex-shrink-0 hover:opacity-70 ml-2"
                         >
                           Hapus
                         </button>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="text-[10px] text-text-secondary font-medium block mb-1">Harga</label>
+                          <label className="text-[10px] text-text-secondary font-medium block mb-1">Harga (Rp)</label>
                           <input
                             type="number"
                             value={item.amount}

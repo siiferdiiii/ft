@@ -43,7 +43,13 @@ export const TransactionGroupRow: React.FC<TransactionGroupRowProps> = ({
 
           <div className="min-w-0 flex-1">
             <div className="text-[13px] font-semibold text-text truncate">{merchant}</div>
-            <div className="text-[11px] text-text-secondary flex items-center gap-1.5">
+            {group.note && group.note !== group.merchant && !group.note.startsWith("Belanja di") && (
+              <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium truncate flex items-center gap-1 mt-0.5">
+                <span>🏷️</span>
+                <span>{group.note}</span>
+              </div>
+            )}
+            <div className="text-[11px] text-text-secondary flex items-center gap-1.5 mt-0.5">
               <span className="text-primary font-medium">{itemCount} item</span>
               <span>•</span>
               <span>{dateStr}</span>
@@ -71,6 +77,14 @@ export const TransactionGroupRow: React.FC<TransactionGroupRowProps> = ({
       {/* Expanded Detail */}
       {expanded && (
         <div className="bg-field/40 border-t border-border divide-y divide-border">
+          {/* Note Banner jika ada info diskon/biaya */}
+          {group.note && group.note !== group.merchant && (
+            <div className="px-4 py-2 bg-emerald-500/10 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 border-b border-border flex items-center gap-1.5">
+              <span>🏷️</span>
+              <span>{group.note}</span>
+            </div>
+          )}
+
           {/* Item list */}
           {group.transactions.map((tx) => (
             <div
