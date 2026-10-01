@@ -36,6 +36,9 @@ export async function GET(req: NextRequest) {
       year: "numeric",
     });
 
+    const startOfMonth = new Date(targetYear, targetMonth, 1, 0, 0, 0);
+    const endOfMonth = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999);
+
     let startDate: Date;
     let endDate: Date;
 
@@ -46,16 +49,19 @@ export async function GET(req: NextRequest) {
       endDate = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate(), 23, 59, 59, 999);
     } else {
       // Awal hingga akhir bulan yang dipilih
-      startDate = new Date(targetYear, targetMonth, 1, 0, 0, 0);
-      endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999);
+      startDate = startOfMonth;
+      endDate = endOfMonth;
     }
+
+    // Tentukan range query: mencakup startDate/endDate (jika weekly lintas bulan) serta startOfMonth/endOfMonth (untuk heatmap)
+    const queryStartDate = startDate < startOfMonth ? startDate : startOfMonth;
+    const queryEndDate = endDate > endOfMonth ? endDate : endOfMonth;
 
     // Ambil transaksi, utang, dompet, dan aset secara paralel dalam satu waktu
     const tenWeeksAgo = new Date(Date.now() - 70 * 24 * 60 * 60 * 1000);
 
     const [
-      transactions,
-      activeDebts,
+      allPeriodTransactions,
       allDebts,
       wallets,
       assets,
@@ -65,23 +71,31 @@ export async function GET(req: NextRequest) {
         where: {
           userId: user.id,
           transactionDate: {
-            gte: startDate,
-            lte: endDate,
+            gte: queryStartDate,
+            lte: queryEndDate,
           },
         },
-        include: {
-          category: true,
+        select: {
+          amount: true,
+          type: true,
+          categoryId: true,
+          transactionDate: true,
+          category: {
+            select: {
+              name: true,
+            },
+          },
         },
       }),
       prisma.debt.findMany({
         where: {
           userId: user.id,
-          isPaidOff: false,
         },
-      }),
-      prisma.debt.findMany({
-        where: {
-          userId: user.id,
+        select: {
+          isPaidOff: true,
+          remainingBalance: true,
+          monthlyPayment: true,
+          createdAt: true,
         },
       }),
       prisma.wallet.findMany({
@@ -89,11 +103,19 @@ export async function GET(req: NextRequest) {
           userId: user.id,
           isArchived: false,
         },
+        select: {
+          balance: true,
+        },
       }),
       prisma.asset.findMany({
         where: {
           userId: user.id,
           isArchived: false,
+        },
+        select: {
+          value: true,
+          liquidityTier: true,
+          createdAt: true,
         },
       }),
       prisma.transaction.findMany({
@@ -110,6 +132,21 @@ export async function GET(req: NextRequest) {
         },
       }),
     ]);
+
+    // Turunkan activeDebts di memori tanpa query DB terpisah
+    const activeDebts = allDebts.filter((d) => !d.isPaidOff);
+
+    // Filter transaksi untuk periode yang diminta (weekly / monthly)
+    const transactions =
+      period === "weekly"
+        ? allPeriodTransactions.filter((t) => {
+            const dt = t.transactionDate instanceof Date ? t.transactionDate : new Date(t.transactionDate);
+            return dt >= startDate && dt <= endDate;
+          })
+        : allPeriodTransactions.filter((t) => {
+            const dt = t.transactionDate instanceof Date ? t.transactionDate : new Date(t.transactionDate);
+            return dt >= startOfMonth && dt <= endOfMonth;
+          });
 
     // 1. Agregasi pengeluaran per kategori
     const expenseMap = new Map<string, { name: string; amount: number }>();
@@ -164,25 +201,12 @@ export async function GET(req: NextRequest) {
       }))
       .sort((a, b) => b.amount - a.amount);
 
-    // 2. Kalender Heatmap untuk bulan target (reuse transactions jika period === 'monthly')
-    const endOfTargetMonth = new Date(targetYear, targetMonth + 1, 0);
-
-    const monthTransactions =
-      period === "monthly"
-        ? transactions
-        : await prisma.transaction.findMany({
-            where: {
-              userId: user.id,
-              transactionDate: {
-                gte: new Date(targetYear, targetMonth, 1, 0, 0, 0),
-                lte: new Date(targetYear, targetMonth + 1, 0, 23, 59, 59),
-              },
-            },
-            select: {
-              amount: true,
-              transactionDate: true,
-            },
-          });
+    // 2. Kalender Heatmap untuk bulan target (reuse allPeriodTransactions tanpa round-trip DB tambahan)
+    const endOfTargetMonth = endOfMonth;
+    const monthTransactions = allPeriodTransactions.filter((t) => {
+      const dt = t.transactionDate instanceof Date ? t.transactionDate : new Date(t.transactionDate);
+      return dt >= startOfMonth && dt <= endOfMonth;
+    });
 
     const dayActivityMap = new Map<string, { count: number; totalAmount: number }>();
     for (const t of monthTransactions) {
@@ -468,7 +492,9 @@ export async function GET(req: NextRequest) {
       hasPrevMonth: true,
     };
 
-    return apiSuccess(result);
+    return apiSuccess(result, 200, {
+      "Cache-Control": "private, no-cache, stale-while-revalidate=60",
+    });
   } catch (error) {
     console.error("GET /api/statistics error:", error);
     return apiError("INTERNAL_ERROR", "Gagal memuat statistik", 500);

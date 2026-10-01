@@ -35,7 +35,9 @@ export async function GET() {
       return a.isPaidOff ? 1 : -1;
     });
 
-    return apiSuccess(result);
+    return apiSuccess(result, 200, {
+      "Cache-Control": "private, no-cache, stale-while-revalidate=60",
+    });
   } catch (error) {
     console.error("GET /api/debts error:", error);
     return apiError("INTERNAL_ERROR", "Gagal memuat daftar utang", 500);

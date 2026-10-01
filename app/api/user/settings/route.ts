@@ -12,6 +12,7 @@ export async function GET() {
 
     const dbUser = await prisma.user.findUnique({
       where: { id: user.id },
+      select: { perpetualFundPercent: true },
     });
 
     const percent = (dbUser as unknown as { perpetualFundPercent?: number })?.perpetualFundPercent ?? 10;
@@ -22,7 +23,9 @@ export async function GET() {
       name: user.name,
     };
 
-    return apiSuccess(data);
+    return apiSuccess(data, 200, {
+      "Cache-Control": "private, no-cache, stale-while-revalidate=60",
+    });
   } catch (error) {
     console.error("GET /api/user/settings error:", error);
     return apiError("INTERNAL_ERROR", "Gagal memuat pengaturan pengguna", 500);

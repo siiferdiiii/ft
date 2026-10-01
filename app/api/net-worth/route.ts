@@ -12,6 +12,7 @@ export async function GET() {
     const [wallets, assets, debts] = await Promise.all([
       prisma.wallet.findMany({
         where: { userId: user.id, isArchived: false },
+        select: { balance: true },
       }),
       prisma.asset.findMany({
         where: { userId: user.id, isArchived: false },
@@ -115,7 +116,9 @@ export async function GET() {
       debts: debtDtos,
     };
 
-    return apiSuccess(summary);
+    return apiSuccess(summary, 200, {
+      "Cache-Control": "private, no-cache, stale-while-revalidate=60",
+    });
   } catch (error) {
     console.error("GET /api/net-worth error:", error);
     return apiError("INTERNAL_ERROR", "Gagal memuat kalkulasi kekayaan bersih", 500);

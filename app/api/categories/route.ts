@@ -61,7 +61,9 @@ export async function GET() {
       };
     });
 
-    return apiSuccess(result);
+    return apiSuccess(result, 200, {
+      "Cache-Control": "private, no-cache, stale-while-revalidate=60",
+    });
   } catch (error) {
     console.error("GET /api/categories error:", error);
     return apiError("INTERNAL_ERROR", "Gagal memuat kategori", 500);

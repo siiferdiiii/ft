@@ -1,14 +1,19 @@
 import { NextResponse } from "next/server";
 import { ApiResponse } from "./types";
 
-export function apiSuccess<T>(data: T, status = 200): NextResponse<ApiResponse<T>> {
-  return NextResponse.json({ data }, { status });
+export function apiSuccess<T>(
+  data: T,
+  status = 200,
+  headers?: HeadersInit
+): NextResponse<ApiResponse<T>> {
+  return NextResponse.json({ data }, { status, headers });
 }
 
 export function apiError(
   code: string,
   message: string,
-  status = 400
+  status = 400,
+  headers?: HeadersInit
 ): NextResponse<ApiResponse<never>> {
   return NextResponse.json(
     {
@@ -17,6 +22,6 @@ export function apiError(
         message,
       },
     },
-    { status }
+    { status, headers }
   );
 }

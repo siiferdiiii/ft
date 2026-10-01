@@ -17,7 +17,6 @@ const STOPWORDS = new Set([
  * Helper untuk memperbarui frekuensi keyword pada CategoryKeyword
  */
 async function recordCategoryKeywords(
-  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
   userId: string,
   categoryId: string,
   text: string
@@ -29,10 +28,11 @@ async function recordCategoryKeywords(
     .filter((w) => w.length >= 3 && !STOPWORDS.has(w) && isNaN(Number(w)));
 
   const uniqueWords = Array.from(new Set(words));
+  if (uniqueWords.length === 0) return;
 
-  for (const keyword of uniqueWords) {
-    try {
-      await tx.categoryKeyword.upsert({
+  await Promise.allSettled(
+    uniqueWords.map((keyword) =>
+      prisma.categoryKeyword.upsert({
         where: {
           userId_keyword_categoryId: {
             userId,
@@ -49,11 +49,9 @@ async function recordCategoryKeywords(
           categoryId,
           frequency: 1,
         },
-      });
-    } catch {
-      // Abaikan jika terjadi constraint conflict
-    }
-  }
+      })
+    )
+  );
 }
 
 export async function GET(req: NextRequest) {
@@ -101,7 +99,19 @@ export async function GET(req: NextRequest) {
 
     const transactions = await prisma.transaction.findMany({
       where: whereClause,
-      include: {
+      select: {
+        id: true,
+        walletId: true,
+        categoryId: true,
+        groupId: true,
+        type: true,
+        amount: true,
+        note: true,
+        source: true,
+        rawInput: true,
+        receiptImageUrl: true,
+        transactionDate: true,
+        createdAt: true,
         wallet: { select: { name: true } },
         category: { select: { name: true } },
         group: { select: { id: true, merchant: true, totalAmount: true } },
@@ -131,7 +141,7 @@ export async function GET(req: NextRequest) {
       createdAt: t.createdAt.toISOString(),
     }));
 
-    return apiSuccess(result);
+    return apiSuccess(result, 200, { "Cache-Control": "private, no-cache" });
   } catch (error) {
     console.error("GET /api/transactions error:", error);
     return apiError("INTERNAL_ERROR", "Gagal memuat riwayat transaksi", 500);
@@ -166,26 +176,29 @@ export async function POST(req: NextRequest) {
       transactionDate,
     } = parsed.data;
 
-    // Verifikasi kepemilikan dompet
-    const wallet = await prisma.wallet.findFirst({
-      where: { id: walletId, userId: user.id },
-    });
+    // Verifikasi kepemilikan dompet & kategori secara paralel (select id saja untuk hemat bandwidth DB)
+    const [wallet, category] = await Promise.all([
+      prisma.wallet.findFirst({
+        where: { id: walletId, userId: user.id },
+        select: { id: true },
+      }),
+      categoryId
+        ? prisma.category.findFirst({
+            where: { id: categoryId, userId: user.id },
+            select: { id: true },
+          })
+        : Promise.resolve({ id: "skip" }),
+    ]);
 
     if (!wallet) {
       return apiError("NOT_FOUND", "Dompet tidak ditemukan atau bukan milik Anda", 404);
     }
 
-    // Verifikasi kategori jika diberikan
-    if (categoryId) {
-      const category = await prisma.category.findFirst({
-        where: { id: categoryId, userId: user.id },
-      });
-      if (!category) {
-        return apiError("NOT_FOUND", "Kategori tidak ditemukan", 404);
-      }
+    if (categoryId && !category) {
+      return apiError("NOT_FOUND", "Kategori tidak ditemukan", 404);
     }
 
-    // Eksekusi atomik dengan prisma.$transaction
+    // Eksekusi atomik minimal & cepat dengan prisma.$transaction
     const result = await prisma.$transaction(async (tx) => {
       // 1. Buat transaksi
       const txRecord = await tx.transaction.create({
@@ -216,14 +229,18 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // 3. Category Learning: simpan kata kunci jika kategori ditentukan
-      if (categoryId && (note || rawInput)) {
-        const textToLearn = `${note || ""} ${rawInput || ""}`.trim();
-        await recordCategoryKeywords(tx, user.id, categoryId, textToLearn);
-      }
-
       return txRecord;
     });
+
+    // 3. Category Learning: fire-and-forget asynchronous di luar transaksi DB
+    if (categoryId && (note || rawInput)) {
+      const textToLearn = `${note || ""} ${rawInput || ""}`.trim();
+      if (textToLearn) {
+        recordCategoryKeywords(user.id, categoryId, textToLearn).catch((err) => {
+          console.warn("[CategoryLearning] Background keyword learning failed:", err);
+        });
+      }
+    }
 
     const dto: TransactionDto = {
       id: result.id,

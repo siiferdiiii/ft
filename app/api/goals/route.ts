@@ -16,7 +16,11 @@ export async function GET() {
         isArchived: false,
       },
       include: {
-        wallet: true,
+        wallet: {
+          select: {
+            balance: true,
+          },
+        },
       },
       orderBy: { createdAt: "asc" },
     });
@@ -34,7 +38,9 @@ export async function GET() {
       createdAt: g.createdAt.toISOString(),
     }));
 
-    return apiSuccess(result);
+    return apiSuccess(result, 200, {
+      "Cache-Control": "private, no-cache, stale-while-revalidate=60",
+    });
   } catch (error) {
     console.error("GET /api/goals error:", error);
     return apiError("INTERNAL_ERROR", "Gagal memuat daftar goal", 500);

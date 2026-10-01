@@ -10,23 +10,38 @@ export async function GET() {
 
     const user = await prisma.user.findUnique({
       where: { id: currentUser.id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        userCode: true,
+        ocrQuota: true,
+        aiBudgetQuota: true,
+        tier: true,
+        perpetualFundPercent: true,
+        createdAt: true,
+      },
     });
 
     if (!user) {
       return apiError("NOT_FOUND", "Pengguna tidak ditemukan", 404);
     }
 
-    return apiSuccess({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      userCode: user.userCode || currentUser.userCode || "FT-84920",
-      ocrQuota: user.ocrQuota ?? 3,
-      aiBudgetQuota: user.aiBudgetQuota ?? 1,
-      tier: user.tier || "FREE",
-      perpetualFundPercent: user.perpetualFundPercent ?? 10,
-      createdAt: user.createdAt.toISOString(),
-    });
+    return apiSuccess(
+      {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        userCode: user.userCode || currentUser.userCode || "FT-84920",
+        ocrQuota: user.ocrQuota ?? 3,
+        aiBudgetQuota: user.aiBudgetQuota ?? 1,
+        tier: user.tier || "FREE",
+        perpetualFundPercent: user.perpetualFundPercent ?? 10,
+        createdAt: user.createdAt.toISOString(),
+      },
+      200,
+      { "Cache-Control": "private, no-cache, stale-while-revalidate=60" }
+    );
   } catch (error) {
     console.error("GET /api/user/profile error:", error);
     return apiError("INTERNAL_ERROR", "Gagal memuat profil pengguna", 500);

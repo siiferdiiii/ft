@@ -10,20 +10,7 @@ export async function GET() {
       return apiError("UNAUTHORIZED", "Silakan login terlebih dahulu", 401);
     }
 
-    // 1. Ambil seluruh dompet aktif untuk menghitung saldo total saat ini
-    const wallets = await prisma.wallet.findMany({
-      where: {
-        userId: user.id,
-        isArchived: false,
-      },
-    });
-
-    const currentTotalBalance = wallets.reduce(
-      (sum, w) => sum + Number(w.balance),
-      0
-    );
-
-    // 2. Siapkan rentang 6 bulan terakhir (bulan -5 s/d bulan 0 / sekarang)
+    // 1. Siapkan rentang 6 bulan terakhir (bulan -5 s/d bulan 0 / sekarang)
     const now = new Date();
     const MONTHS_COUNT = 6;
     const startOfOldestMonth = new Date(
@@ -35,20 +22,36 @@ export async function GET() {
       0
     );
 
-    // 3. Ambil seluruh transaksi dalam 6 bulan terakhir
-    const transactions = await prisma.transaction.findMany({
-      where: {
-        userId: user.id,
-        transactionDate: {
-          gte: startOfOldestMonth,
+    // 2. Ambil seluruh dompet aktif & transaksi dalam 6 bulan terakhir secara paralel
+    const [wallets, transactions] = await Promise.all([
+      prisma.wallet.findMany({
+        where: {
+          userId: user.id,
+          isArchived: false,
         },
-      },
-      select: {
-        amount: true,
-        type: true,
-        transactionDate: true,
-      },
-    });
+        select: {
+          balance: true,
+        },
+      }),
+      prisma.transaction.findMany({
+        where: {
+          userId: user.id,
+          transactionDate: {
+            gte: startOfOldestMonth,
+          },
+        },
+        select: {
+          amount: true,
+          type: true,
+          transactionDate: true,
+        },
+      }),
+    ]);
+
+    const currentTotalBalance = wallets.reduce(
+      (sum, w) => sum + Number(w.balance),
+      0
+    );
 
     // 4. Siapkan bucket bulanan
     interface MonthBucket {
@@ -197,7 +200,9 @@ export async function GET() {
       },
     };
 
-    return apiSuccess(result);
+    return apiSuccess(result, 200, {
+      "Cache-Control": "private, no-cache, stale-while-revalidate=60",
+    });
   } catch (error) {
     console.error("GET /api/statistics/balance-growth error:", error);
     return apiError("INTERNAL_ERROR", "Gagal memuat histori pertumbuhan saldo", 500);

@@ -119,16 +119,10 @@ export default function DashboardPage() {
 
     const loadSettingsAndCache = async () => {
       try {
-        const [settingsRes, profileRes] = await Promise.all([
-          fetch("/api/user/settings"),
-          fetch("/api/user/profile"),
-        ]);
-        const [settingsJson, profileJson] = await Promise.all([
-          settingsRes.json(),
-          profileRes.json(),
-        ]);
-        if (settingsJson.data?.perpetualFundPercent) {
-          setUserPercent(settingsJson.data.perpetualFundPercent);
+        const profileRes = await fetch("/api/user/profile");
+        const profileJson = await profileRes.json();
+        if (profileJson.data?.perpetualFundPercent !== undefined) {
+          setUserPercent(profileJson.data.perpetualFundPercent);
         }
         if (profileJson.data?.ocrQuota !== undefined) {
           const quota = profileJson.data.ocrQuota;

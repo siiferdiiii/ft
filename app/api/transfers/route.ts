@@ -57,10 +57,10 @@ export async function POST(req: NextRequest) {
 
     const { fromWalletId, toWalletId, amount, note, transferDate } = parsed.data;
 
-    // Verifikasi kedua dompet milik user
+    // Verifikasi kedua dompet milik user (select id saja)
     const [fromWallet, toWallet] = await Promise.all([
-      prisma.wallet.findFirst({ where: { id: fromWalletId, userId: user.id } }),
-      prisma.wallet.findFirst({ where: { id: toWalletId, userId: user.id } }),
+      prisma.wallet.findFirst({ where: { id: fromWalletId, userId: user.id }, select: { id: true } }),
+      prisma.wallet.findFirst({ where: { id: toWalletId, userId: user.id }, select: { id: true } }),
     ]);
 
     if (!fromWallet || !toWallet) {

@@ -15,11 +15,19 @@ export async function GET() {
     const [dbUser, wallets, incomeTransactions, expenseTransactions] = await Promise.all([
       prisma.user.findUnique({
         where: { id: user.id },
+        select: { perpetualFundPercent: true },
       }),
       prisma.wallet.findMany({
         where: {
           userId: user.id,
           isArchived: false,
+        },
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          balance: true,
+          isPerpetualFund: true,
         },
       }),
       prisma.transaction.findMany({
@@ -28,12 +36,18 @@ export async function GET() {
           type: "INCOME",
           transactionDate: { gte: threeMonthsAgo },
         },
+        select: {
+          amount: true,
+        },
       }),
       prisma.transaction.findMany({
         where: {
           userId: user.id,
           type: "EXPENSE",
           transactionDate: { gte: twelveMonthsAgo },
+        },
+        select: {
+          amount: true,
         },
       }),
     ]);
@@ -87,7 +101,9 @@ export async function GET() {
       annualExpenseTotal,
     };
 
-    return apiSuccess(result);
+    return apiSuccess(result, 200, {
+      "Cache-Control": "private, no-cache, stale-while-revalidate=60",
+    });
   } catch (error) {
     console.error("GET /api/dana-abadi/stats error:", error);
     return apiError("INTERNAL_ERROR", "Gagal memuat statistik Dana Abadi", 500);
