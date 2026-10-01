@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
       // Ambil seluruh kategori bertipe INCOME milik user
       const incomeCategories = await prisma.category.findMany({
         where: { userId: user.id, type: "INCOME" },
+        select: { id: true, name: true },
       });
 
       if (incomeCategories.length > 0) {
@@ -93,8 +94,10 @@ export async function POST(req: NextRequest) {
           userId: user.id,
           keyword: { in: words },
         },
-        include: {
-          category: true,
+        select: {
+          categoryId: true,
+          frequency: true,
+          category: { select: { name: true } },
         },
         orderBy: { frequency: "desc" },
         take: 5,
@@ -129,6 +132,7 @@ export async function POST(req: NextRequest) {
     // 3. Kamus bawaan pengeluaran umum (Day-1 Fallback)
     const expenseCategories = await prisma.category.findMany({
       where: { userId: user.id, type: "EXPENSE" },
+      select: { id: true, name: true },
     });
 
     if (expenseCategories.length > 0) {

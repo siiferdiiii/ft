@@ -14,6 +14,17 @@ export async function GET() {
       where: {
         userId: user.id,
       },
+      select: {
+        id: true,
+        name: true,
+        principal: true,
+        remainingBalance: true,
+        monthlyPayment: true,
+        dueDayOfMonth: true,
+        interestRate: true,
+        isPaidOff: true,
+        createdAt: true,
+      },
       orderBy: { createdAt: "desc" },
     });
 

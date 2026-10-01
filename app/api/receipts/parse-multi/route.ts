@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
       prisma.category.findMany({ where: { userId: user.id, type: "EXPENSE" }, select: { id: true, name: true } }),
     ]);
 
-    // Cek kuota
+    // Cek kuota awal (bukan atomic — hanya early exit sebelum proses berat)
     const currentQuota = dbUser?.ocrQuota ?? 0;
     if (currentQuota <= 0) {
       return apiError(
@@ -311,12 +311,25 @@ Format output HARUS HANYA JSON murni:
       );
     }
 
-    // 6. Sukses: Potong kuota scan user sebanyak 1
-    const updatedUser = await prisma.user.update({
+    // 6. Sukses: Potong kuota secara ATOMIC (compare-and-swap) — mencegah race condition
+    // Hanya update jika kuota MASIH > 0 saat ini (menghindari double-scan dari request paralel)
+    const decrResult = await prisma.user.updateMany({
+      where: { id: user.id, ocrQuota: { gt: 0 } },
+      data: { ocrQuota: { decrement: 1 } },
+    });
+
+    // Jika count === 0, berarti kuota sudah habis saat request ini diproses (race condition)
+    if (decrResult.count === 0) {
+      return apiError(
+        "QUOTA_EXCEEDED",
+        "Kuota Scan Resi AI Multi-Item Anda telah habis. Silakan beli paket kuota tambahan di Halaman Produk untuk melanjutkan.",
+        403
+      );
+    }
+
+    // Ambil kuota terbaru setelah atomic decrement
+    const updatedUser = await prisma.user.findUnique({
       where: { id: user.id },
-      data: {
-        ocrQuota: { decrement: 1 },
-      },
       select: { ocrQuota: true },
     });
 
@@ -363,7 +376,7 @@ Format output HARUS HANYA JSON murni:
       discountNotes,
       items,
       receiptImageUrl: previewDataUrl,
-      remainingQuota: updatedUser.ocrQuota,
+      remainingQuota: updatedUser?.ocrQuota ?? Math.max(0, currentQuota - 1),
     };
 
     return apiSuccess(result);

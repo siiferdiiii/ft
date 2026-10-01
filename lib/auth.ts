@@ -123,7 +123,16 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       if (user && !error) {
         const email = user.email || `${user.id}@user.local`;
         await ensureUserAndDefaults(user.id, email, user.user_metadata?.name);
-        const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
+        // Satu query untuk ambil data user setelah initialization
+        const dbUser = await prisma.user.findUnique({
+          where: { id: user.id },
+          select: {
+            userCode: true,
+            ocrQuota: true,
+            aiBudgetQuota: true,
+            tier: true,
+          },
+        });
         return {
           id: user.id,
           email,
