@@ -26,30 +26,16 @@ async function recordItemCategoryKeywords(
 
   const uniqueWords = Array.from(new Set(words));
 
-  for (const keyword of uniqueWords) {
-    try {
-      await tx.categoryKeyword.upsert({
-        where: {
-          userId_keyword_categoryId: {
-            userId,
-            keyword,
-            categoryId,
-          },
-        },
-        update: {
-          frequency: { increment: 1 },
-        },
-        create: {
-          userId,
-          keyword,
-          categoryId,
-          frequency: 1,
-        },
-      });
-    } catch {
-      // Abaikan kendala upsert
-    }
-  }
+  // Parallel upsert — jauh lebih cepat dari sequential
+  await Promise.allSettled(
+    uniqueWords.map((keyword) =>
+      tx.categoryKeyword.upsert({
+        where: { userId_keyword_categoryId: { userId, keyword, categoryId } },
+        update: { frequency: { increment: 1 } },
+        create: { userId, keyword, categoryId, frequency: 1 },
+      })
+    )
+  );
 }
 
 export async function POST(req: NextRequest) {
@@ -110,48 +96,43 @@ export async function POST(req: NextRequest) {
           },
         });
 
-        // 3. Buat setiap item sebagai transaksi individual yang terhubung ke grup
-        const createdTransactions = [];
-        for (const item of items) {
-          const createdTx = await tx.transaction.create({
-            data: {
+        // 3. Buat semua item sekaligus dengan createMany (1 round-trip DB, jauh lebih cepat)
+        await tx.transaction.createMany({
+          data: items.map((item) => {
+            // Kumpulkan keyword untuk diproses setelah transaksi
+            if (item.categoryId) {
+              keywordQueue.push({ categoryId: item.categoryId, note: item.note });
+            }
+            return {
               userId: user.id,
               walletId,
               categoryId: item.categoryId || null,
               groupId: group.id,
-              type: "EXPENSE",
+              type: "EXPENSE" as const,
               amount: item.amount,
               note: item.note,
               source: "RECEIPT_SCAN",
               rawInput: merchant ? `${merchant} - ${item.note}` : item.note,
               receiptImageUrl: receiptImageUrl || null,
               transactionDate: parsedDate,
-            },
-          });
-
-          createdTransactions.push(createdTx);
-
-          // Kumpulkan data keyword untuk diproses di luar transaksi
-          if (item.categoryId) {
-            keywordQueue.push({ categoryId: item.categoryId, note: item.note });
-          }
-        }
+            };
+          }),
+        });
 
         return {
           group,
-          transactions: createdTransactions,
           newBalance: Number(updatedWallet.balance),
         };
       },
-      { timeout: 15000 } // 15 detik — untuk resi dengan banyak item
+      { timeout: 10000 } // 10 detik cukup karena sudah pakai createMany
     );
 
-    // Keyword learning dijalankan di luar transaksi (non-kritis, tidak perlu atomic)
-    for (const { categoryId, note: itemNote } of keywordQueue) {
-      await recordItemCategoryKeywords(prisma, user.id, categoryId, itemNote).catch(() => {
-        // Abaikan error keyword — tidak boleh gagalkan transaksi utama
-      });
-    }
+    // Keyword learning: fire-and-forget — tidak memblokir response
+    Promise.allSettled(
+      keywordQueue.map(({ categoryId, note: itemNote }) =>
+        recordItemCategoryKeywords(prisma, user.id, categoryId, itemNote)
+      )
+    ).catch(() => {/* abaikan */});
 
     return apiSuccess({
       message: `Berhasil mencatat ${items.length} item transaksi belanja ke grup.`,

@@ -7,6 +7,7 @@ import { callGeminiWithFailover } from "@/lib/gemini";
 
 const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_FILE_SIZE = 8 * 1024 * 1024; // 8MB
+const TARGET_IMAGE_SIZE = 1.5 * 1024 * 1024; // Kompres jika > 1.5MB untuk mempercepat upload ke Gemini
 
 function isValidImageMagicBytes(buffer: Buffer): boolean {
   if (buffer.length < 12) return false;
@@ -46,22 +47,7 @@ export async function POST(req: NextRequest) {
     const user = await getCurrentUser();
     if (!user) return apiError("UNAUTHORIZED", "Silakan login terlebih dahulu", 401);
 
-    // 1. Cek Kuota Scan AI Multi-Transaksi
-    const dbUser = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { ocrQuota: true },
-    });
-
-    const currentQuota = dbUser?.ocrQuota ?? 0;
-    if (currentQuota <= 0) {
-      return apiError(
-        "QUOTA_EXCEEDED",
-        "Kuota Scan Resi AI Multi-Item Anda telah habis. Silakan beli paket kuota tambahan di Halaman Produk untuk melanjutkan.",
-        403
-      );
-    }
-
-    // 2. Rate Limit
+    // 1. Rate Limit (tidak butuh DB)
     const clientIp = getClientIp(req);
     const rateLimit = checkRateLimit(`ocr-multi:${user.id}:${clientIp}`, 10, 60 * 1000);
     if (!rateLimit.success) {
@@ -69,6 +55,22 @@ export async function POST(req: NextRequest) {
         "TOO_MANY_REQUESTS",
         "Terlalu banyak permintaan scan. Silakan tunggu 1 menit.",
         429
+      );
+    }
+
+    // 2. Ambil kuota + kategori user secara paralel (tidak bergantung pada file)
+    const [dbUser, userCategories] = await Promise.all([
+      prisma.user.findUnique({ where: { id: user.id }, select: { ocrQuota: true } }),
+      prisma.category.findMany({ where: { userId: user.id, type: "EXPENSE" }, select: { id: true, name: true } }),
+    ]);
+
+    // Cek kuota
+    const currentQuota = dbUser?.ocrQuota ?? 0;
+    if (currentQuota <= 0) {
+      return apiError(
+        "QUOTA_EXCEEDED",
+        "Kuota Scan Resi AI Multi-Item Anda telah habis. Silakan beli paket kuota tambahan di Halaman Produk untuk melanjutkan.",
+        403
       );
     }
 
@@ -103,14 +105,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const base64Data = buffer.toString("base64");
-    const mimeType = file.type;
+    // Kompres gambar jika terlalu besar (>1.5MB) untuk mempercepat transfer ke Gemini
+    let processedBuffer = buffer;
+    let mimeType = file.type;
+    if (buffer.length > TARGET_IMAGE_SIZE) {
+      try {
+        const sharp = (await import("sharp")).default;
+        processedBuffer = await sharp(buffer)
+          .resize({ width: 1200, height: 1600, fit: "inside", withoutEnlargement: true })
+          .jpeg({ quality: 80 })
+          .toBuffer();
+        mimeType = "image/jpeg";
+        console.log(`[OCR] Gambar dikompres: ${buffer.length} → ${processedBuffer.length} bytes`);
+      } catch {
+        // Jika sharp tidak tersedia, lanjut dengan buffer asli
+        console.warn("[OCR] sharp tidak tersedia, kirim gambar asli");
+      }
+    }
 
-    // 4. Ambil daftar kategori pengeluaran user agar AI bisa auto-suggest kategori
-    const userCategories = await prisma.category.findMany({
-      where: { userId: user.id, type: "EXPENSE" },
-      select: { id: true, name: true },
-    });
+    const base64Data = processedBuffer.toString("base64");
 
     const categoryListContext = userCategories.map((c) => ({ id: c.id, name: c.name }));
 
@@ -194,7 +207,7 @@ Format output HARUS HANYA JSON murni:
       ],
       generationConfig: {
         temperature: 0.1,
-        maxOutputTokens: 8192,
+        maxOutputTokens: 2048, // Cukup untuk JSON resi (hemat ~5-10s vs 8192)
         responseMimeType: "application/json",
         thinkingConfig: {
           thinkingBudget: 0,
