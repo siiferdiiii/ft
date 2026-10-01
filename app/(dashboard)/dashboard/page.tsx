@@ -46,7 +46,16 @@ export default function DashboardPage() {
   const [isSimAOpen, setIsSimAOpen] = useState(false);
   const [preFillData, setPreFillData] = useState<PreFillTransactionData | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
-  const [ocrQuota, setOcrQuota] = useState(0);
+  const [ocrQuota, setOcrQuota] = useState(() => {
+    // Hydrate from cache instantly — hindari flash 0 saat modal dibuka
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("ft_cache_ocr_quota");
+        if (cached !== null) return Number(cached);
+      } catch {}
+    }
+    return 0;
+  });
   const [userPercent, setUserPercent] = useState<number>(10);
   const [incomeSuggestion, setIncomeSuggestion] = useState<{
     incomeAmount: number;
@@ -122,7 +131,10 @@ export default function DashboardPage() {
           setUserPercent(settingsJson.data.perpetualFundPercent);
         }
         if (profileJson.data?.ocrQuota !== undefined) {
-          setOcrQuota(profileJson.data.ocrQuota);
+          const quota = profileJson.data.ocrQuota;
+          setOcrQuota(quota);
+          // Cache ke localStorage agar tampil instan saat berikutnya
+          try { localStorage.setItem("ft_cache_ocr_quota", String(quota)); } catch {}
         }
       } catch {
         // Fallback default 10%
@@ -591,6 +603,8 @@ export default function DashboardPage() {
         ocrQuota={ocrQuota}
         onSaved={(_newBalance, remainingQuota) => {
           setOcrQuota(remainingQuota);
+          // Update cache agar nilai terbaru tampil instan di kunjungan berikutnya
+          try { localStorage.setItem("ft_cache_ocr_quota", String(remainingQuota)); } catch {}
           refreshData(true);
           setNotification("Struk berhasil disimpan sebagai grup transaksi!");
         }}
