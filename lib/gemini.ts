@@ -48,7 +48,7 @@ export interface GeminiCallResult {
  */
 export async function callGeminiWithFailover(
   payload: unknown,
-  model = process.env.GEMINI_MODEL || "gemini-2.5-flash"
+  preferredModel = process.env.GEMINI_MODEL || "gemini-3.8-flash"
 ): Promise<GeminiCallResult> {
   const keys = getOrderedGeminiKeys();
 
@@ -61,6 +61,11 @@ export async function callGeminiWithFailover(
     };
   }
 
+  // Model fallback list: utamakan preferredModel, lalu gemini-3.8-flash, gemini-2.5-flash, gemini-flash-latest
+  const candidateModels = Array.from(
+    new Set([preferredModel, "gemini-3.8-flash", "gemini-2.5-flash", "gemini-flash-latest"].filter(Boolean))
+  );
+
   let lastStatus = 0;
   let all429 = true;
   const errors: string[] = [];
@@ -69,51 +74,51 @@ export async function callGeminiWithFailover(
     const apiKey = keys[i];
     const maskedKey = apiKey.length > 10 ? `${apiKey.slice(0, 6)}...${apiKey.slice(-4)}` : "(key pendek)";
 
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+    for (const model of candidateModels) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
 
-      if (!res.ok) {
-        const errText = await res.text().catch(() => "");
-        lastStatus = res.status;
-        errors.push(`Key #${i + 1}: HTTP ${res.status}`);
+        if (!res.ok) {
+          const errText = await res.text().catch(() => "");
+          lastStatus = res.status;
 
-        console.warn(
-          `[Gemini Rotation] Key #${i + 1} (${maskedKey}) gagal dengan status ${res.status}:`,
-          errText
-        );
+          // Jika model tidak ditemukan / deprecated (404), coba model berikutnya pada key ini
+          if (res.status === 404 && candidateModels.length > 1) {
+            console.warn(
+              `[Gemini Rotation] Model ${model} pada Key #${i + 1} (${maskedKey}) mengembalikan 404 (tidak tersedia). Mencoba fallback model berikutnya...`
+            );
+            continue;
+          }
 
-        if (res.status !== 429) {
-          all429 = false;
+          errors.push(`Key #${i + 1} (${model}): HTTP ${res.status}`);
+          console.warn(
+            `[Gemini Rotation] Key #${i + 1} (${maskedKey}) model ${model} gagal dengan status ${res.status}:`,
+            errText
+          );
+
+          if (res.status !== 429) {
+            all429 = false;
+          }
+
+          // Jika bukan 404, pindah ke API key berikutnya
+          break;
         }
 
-        // Jika masih ada key lain dalam daftar, coba key berikutnya
-        if (i < keys.length - 1) {
-          continue;
-        }
-
-        // Ini key terakhir dan semuanya gagal
-        return {
-          res: null,
-          status: res.status,
-          allQuotaExceeded: all429 && res.status === 429,
-          errorDetail: errors.join(" | "),
-        };
+        // Respon sukses (200 OK)
+        const data = await res.json();
+        return { res, status: res.status, allQuotaExceeded: false, data };
+      } catch (err) {
+        console.error(`[Gemini Rotation] Exception saat fetch dengan key #${i + 1} (${maskedKey}) model ${model}:`, err);
+        all429 = false;
+        lastStatus = 500;
+        errors.push(`Key #${i + 1} (${maskedKey}): Exception ${String(err).slice(0, 100)}`);
+        break;
       }
-
-      // Respon sukses (200 OK)
-      const data = await res.json();
-      return { res, status: res.status, allQuotaExceeded: false, data };
-    } catch (err) {
-      console.error(`[Gemini Rotation] Exception saat fetch dengan key #${i + 1} (${maskedKey}):`, err);
-      all429 = false;
-      lastStatus = 500;
-      errors.push(`Key #${i + 1} (${maskedKey}): Exception ${String(err).slice(0, 100)}`);
-      continue;
     }
   }
 

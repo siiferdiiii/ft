@@ -159,7 +159,11 @@ Format output HARUS HANYA JSON murni tanpa markdown/backticks/kutipan tambahan:
       ],
       generationConfig: {
         temperature: 0.1,
-        maxOutputTokens: 2048,
+        maxOutputTokens: 8192,
+        responseMimeType: "application/json",
+        thinkingConfig: {
+          thinkingBudget: 0,
+        },
       },
     };
 
@@ -174,11 +178,13 @@ Format output HARUS HANYA JSON murni tanpa markdown/backticks/kutipan tambahan:
       );
     }
 
-    // Ekstrak teks respon Gemini
+    // Ekstrak teks respon Gemini (abaikan thought parts jika ada)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rawCandidates = (aiResult.data as any)?.candidates;
-    const responseText =
-      rawCandidates?.[0]?.content?.parts?.[0]?.text || "";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parts = (rawCandidates?.[0]?.content?.parts || []) as any[];
+    const textPart = [...parts].reverse().find((p) => p.text && !p.thought) || parts[0];
+    const responseText = textPart?.text || "";
 
     if (!responseText) {
       return apiError("AI_PARSE_EMPTY", "AI tidak dapat membaca teks dari struk ini.", 422);
@@ -207,12 +213,27 @@ Format output HARUS HANYA JSON murni tanpa markdown/backticks/kutipan tambahan:
     try {
       parsedJson = JSON.parse(cleanedJsonText);
     } catch (parseError) {
-      console.error("Gagal parse JSON dari output Gemini:", cleanedJsonText, parseError);
-      return apiError(
-        "AI_PARSE_ERROR",
-        "Gagal menguraikan rincian struk belanja. Pastikan foto struk terlihat jelas dan tegak.",
-        422
-      );
+      // Jika JSON terpotong di tengah stream (misal karena batas panjang), coba perbaiki strukturnya
+      try {
+        let fixed = cleanedJsonText;
+        const lastValidItemIndex = fixed.lastIndexOf("}");
+        if (lastValidItemIndex !== -1 && fixed.includes('"items"')) {
+          fixed = fixed.substring(0, lastValidItemIndex + 1);
+          fixed = fixed.replace(/,\s*$/, "");
+          fixed += "\n  ]\n}";
+          parsedJson = JSON.parse(fixed);
+          console.warn("[AI Multi-OCR] Berhasil memulihkan JSON yang terpotong:", fixed);
+        } else {
+          throw parseError;
+        }
+      } catch {
+        console.error("Gagal parse JSON dari output Gemini:", cleanedJsonText, parseError);
+        return apiError(
+          "AI_PARSE_ERROR",
+          "Gagal menguraikan rincian struk belanja. Pastikan foto struk terlihat jelas dan tegak.",
+          422
+        );
+      }
     }
 
     const items: ParsedMultiReceiptItem[] = (parsedJson.items || [])
