@@ -15,14 +15,20 @@ model User {
   id              String            @id // sama dengan auth.users.id dari Supabase Auth (UUID) — bukan default cuid()
   email           String            @unique // mirror dari auth.users.email, untuk kemudahan query/join
   name            String?
+  userCode        String?           @unique // Kode unik pendek (mis. FT-84920) untuk referensi catatan Lynk.id
+  ocrQuota        Int               @default(3) // Kuota scan AI OCR multi-transaksi (default 3 gratis)
+  aiBudgetQuota   Int               @default(1) // Kuota AI susun budget (default 1 gratis)
+  tier            String            @default("FREE") // "FREE" | "PRO"
   perpetualFundPercent Int          @default(10) // persentase auto-suggest alokasi Dana Abadi, lihat PRD 4.8.2
   monthlyIncome   Decimal?          @db.Decimal(14, 2) // hasil interview AI budget, lihat PRD_AI_BUDGET_INTERVIEW.md — data sensitif, lihat SECURITY_STANDARDS.md
   wallets         Wallet[]
   categories      Category[]
   transactions    Transaction[]
+  transactionGroups TransactionGroup[]
   transfers       Transfer[]
   categoryKeywords CategoryKeyword[]
   aiInteractionLogs AiInteractionLog[]
+  purchaseOrders  PurchaseOrder[]
   assets          Asset[]
   debts           Debt[]
   goals           Goal[]
@@ -41,6 +47,7 @@ model Wallet {
   isPerpetualFund Boolean      @default(false) // flag Dana Abadi, lihat PRD 4.8.1 — bukan tipe dompet baru
   isArchived     Boolean       @default(false)
   transactions   Transaction[]
+  transactionGroups TransactionGroup[]
   transfersFrom  Transfer[]    @relation("TransferFrom")
   transfersTo    Transfer[]    @relation("TransferTo")
   goal           Goal?         // dompet dedicated untuk satu goal, lihat PRD_GOALS.md — null kalau dompet biasa
@@ -77,26 +84,47 @@ enum BudgetPeriod {
   MONTHLY
 }
 
-model Transaction {
-  id              String          @id @default(cuid())
+model TransactionGroup {
+  id              String        @id @default(cuid())
   userId          String
-  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   walletId        String
-  wallet          Wallet          @relation(fields: [walletId], references: [id])
+  wallet          Wallet        @relation(fields: [walletId], references: [id])
+  totalAmount     Decimal       @db.Decimal(14, 2)
+  merchant        String?
+  note            String?
+  receiptImageUrl String?
+  transactionDate DateTime      @default(now())
+  createdAt       DateTime      @default(now())
+  transactions    Transaction[]
+
+  @@index([userId, transactionDate])
+  @@index([walletId])
+}
+
+model Transaction {
+  id              String            @id @default(cuid())
+  userId          String
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  walletId        String
+  wallet          Wallet            @relation(fields: [walletId], references: [id])
   categoryId      String?
-  category        Category?       @relation(fields: [categoryId], references: [id])
+  category        Category?         @relation(fields: [categoryId], references: [id])
+  groupId         String?
+  group           TransactionGroup? @relation(fields: [groupId], references: [id], onDelete: Cascade)
   type            TransactionType
-  amount          Decimal         @db.Decimal(14, 2)
+  amount          Decimal           @db.Decimal(14, 2)
   note            String?
   source          InputSource
   rawInput        String?
   receiptImageUrl String?
-  transactionDate DateTime        @default(now())
-  createdAt       DateTime        @default(now())
+  transactionDate DateTime          @default(now())
+  createdAt       DateTime          @default(now())
 
   @@index([userId, transactionDate])
   @@index([walletId])
   @@index([categoryId])
+  @@index([groupId])
 }
 
 enum TransactionType {
@@ -113,7 +141,7 @@ enum InputSource {
 model Transfer {
   id           String   @id @default(cuid())
   userId       String
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   fromWalletId String
   fromWallet   Wallet   @relation("TransferFrom", fields: [fromWalletId], references: [id])
   toWalletId   String
@@ -221,6 +249,21 @@ model Goal {
   isCompleted       Boolean   @default(false)
   isArchived        Boolean   @default(false)
   createdAt         DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model PurchaseOrder {
+  id                  String   @id @default(cuid())
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId             String   @unique // ID transaksi/order dari Lynk.id
+  productName         String
+  amount              Decimal  @db.Decimal(14, 2)
+  ocrQuotaAdded       Int      @default(0)
+  aiBudgetQuotaAdded  Int      @default(0)
+  rawWebhookPayload   String?  @db.Text
+  createdAt           DateTime @default(now())
 
   @@index([userId])
 }

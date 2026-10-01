@@ -23,6 +23,22 @@ export interface UserSettingsDto {
   perpetualFundPercent: number;
   email?: string;
   name?: string | null;
+  userCode?: string | null;
+  ocrQuota?: number;
+  aiBudgetQuota?: number;
+  tier?: string;
+}
+
+export interface UserProfileDto {
+  id: string;
+  email: string;
+  name: string | null;
+  userCode: string | null;
+  ocrQuota: number;
+  aiBudgetQuota: number;
+  tier: string;
+  perpetualFundPercent: number;
+  createdAt: string;
 }
 
 export interface DanaAbadiStatsDto {
@@ -52,12 +68,28 @@ export interface CategoryDto {
   createdAt: string;
 }
 
+export interface TransactionGroupDto {
+  id: string;
+  walletId: string;
+  walletName?: string;
+  totalAmount: number;
+  merchant: string | null;
+  note: string | null;
+  receiptImageUrl: string | null;
+  transactionDate: string;
+  createdAt: string;
+  transactions: TransactionDto[];
+}
+
 export interface TransactionDto {
   id: string;
   walletId: string;
   walletName?: string;
   categoryId: string | null;
   categoryName?: string | null;
+  groupId?: string | null;
+  groupMerchant?: string | null;
+  groupTotalAmount?: number | null;
   type: TransactionType;
   amount: number;
   note: string | null;

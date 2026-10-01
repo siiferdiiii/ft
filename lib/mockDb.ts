@@ -7,7 +7,35 @@ export interface MockUser {
   id: string;
   email: string;
   name?: string | null;
+  userCode?: string | null;
+  ocrQuota: number;
+  aiBudgetQuota: number;
+  tier: string;
   perpetualFundPercent: number;
+  createdAt: Date;
+}
+
+export interface MockTransactionGroup {
+  id: string;
+  userId: string;
+  walletId: string;
+  totalAmount: number;
+  merchant: string | null;
+  note: string | null;
+  receiptImageUrl: string | null;
+  transactionDate: Date;
+  createdAt: Date;
+}
+
+export interface MockPurchaseOrder {
+  id: string;
+  userId: string;
+  orderId: string;
+  productName: string;
+  amount: number;
+  ocrQuotaAdded: number;
+  aiBudgetQuotaAdded: number;
+  rawWebhookPayload?: string | null;
   createdAt: Date;
 }
 
@@ -51,6 +79,7 @@ export interface MockTransaction {
   userId: string;
   walletId: string;
   categoryId: string | null;
+  groupId?: string | null;
   type: "INCOME" | "EXPENSE";
   amount: number;
   note: string | null;
@@ -118,10 +147,17 @@ class MockDatabase {
       id: DEFAULT_USER_ID,
       email: "demo@financetracker.local",
       name: "Demo User",
+      userCode: "FT-84920",
+      ocrQuota: 3,
+      aiBudgetQuota: 1,
+      tier: "FREE",
       perpetualFundPercent: 10,
       createdAt: new Date(),
     },
   ];
+
+  transactionGroups: MockTransactionGroup[] = [];
+  purchaseOrders: MockPurchaseOrder[] = [];
 
   wallets: MockWallet[] = [
     {

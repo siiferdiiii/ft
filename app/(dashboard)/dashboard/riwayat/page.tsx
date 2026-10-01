@@ -2,15 +2,19 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAppData } from "@/lib/context/AppDataContext";
-import { TransactionDto } from "@/lib/types";
+import { TransactionDto, TransactionGroupDto } from "@/lib/types";
 import { formatCurrency } from "@/lib/currency";
 import { BottomNav } from "@/components/ui/BottomNav";
 import { SwipeDeleteRow } from "@/components/ui/SwipeDeleteRow";
 import { TransactionRow } from "@/components/features/TransactionRow";
+import { TransactionGroupRow } from "@/components/features/TransactionGroupRow";
 import Link from "next/link";
 
 export default function RiwayatPage() {
   const { wallets, categories, recentTransactions, refreshData } = useAppData();
+
+  // Tabs: transaksi | grup
+  const [activeTab, setActiveTab] = useState<"transaksi" | "grup">("transaksi");
 
   // State filter
   const [search, setSearch] = useState("");
@@ -29,6 +33,11 @@ export default function RiwayatPage() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+
+  // Transaction groups state
+  const [groups, setGroups] = useState<TransactionGroupDto[]>([]);
+  const [groupsLoading, setGroupsLoading] = useState(false);
+  const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
 
   // Sync recentTransactions if initial state was empty
   useEffect(() => {
@@ -104,6 +113,43 @@ export default function RiwayatPage() {
     };
   }, [fetchTransactions]);
 
+  // Fetch groups when tab is active
+  const fetchGroups = useCallback(async () => {
+    setGroupsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("limit", "50");
+      const res = await fetch(`/api/transactions/groups?${params.toString()}`);
+      const json = await res.json();
+      if (json.data) setGroups(json.data);
+    } catch (err) {
+      console.warn("Gagal memuat grup transaksi:", err);
+    } finally {
+      setGroupsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "grup") {
+      fetchGroups();
+    }
+  }, [activeTab, fetchGroups]);
+
+  const handleDeleteGroup = useCallback(async (groupId: string) => {
+    setDeletingGroupId(groupId);
+    try {
+      const res = await fetch(`/api/transactions/groups?id=${groupId}`, { method: "DELETE" });
+      if (res.ok) {
+        setGroups((prev) => prev.filter((g) => g.id !== groupId));
+        refreshData(true);
+      }
+    } catch (err) {
+      console.warn("Gagal menghapus grup:", err);
+    } finally {
+      setDeletingGroupId(null);
+    }
+  }, [refreshData]);
+
   const activeFilterCount = [filterWalletId, filterCategoryId, filterType, dateFrom, dateTo].filter(Boolean).length;
 
   const clearAllFilters = () => {
@@ -142,6 +188,23 @@ export default function RiwayatPage() {
             </svg>
           </Link>
           <h1 className="text-[18px] font-bold text-text">Riwayat Transaksi</h1>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 mb-3">
+          {(["transaksi", "grup"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-1.5 rounded-full text-[12px] font-semibold transition-all ${
+                activeTab === tab
+                  ? "bg-primary text-white"
+                  : "bg-field text-text-secondary hover:text-text"
+              }`}
+            >
+              {tab === "transaksi" ? "Transaksi" : "📦 Struk AI"}
+            </button>
+          ))}
         </div>
 
         {/* Search Bar */}
@@ -282,8 +345,56 @@ export default function RiwayatPage() {
         )}
       </div>
 
-      {/* Transaction List - Grouped by Date */}
+      {/* Content */}
       <div className="flex-1 px-5 space-y-4">
+
+        {/* Tab: Grup AI */}
+        {activeTab === "grup" && (
+          <>
+            {groupsLoading ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="bg-surface rounded-card-lg border border-border p-4 animate-pulse">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-field" />
+                      <div className="flex-1">
+                        <div className="h-3 bg-field rounded w-2/3 mb-2" />
+                        <div className="h-2.5 bg-field rounded w-1/3" />
+                      </div>
+                      <div className="h-4 bg-field rounded w-20" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : groups.length === 0 ? (
+              <div className="py-16 text-center">
+                <div className="w-16 h-16 rounded-full bg-chip text-text-secondary mx-auto flex items-center justify-center mb-4">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                </div>
+                <p className="text-[14px] font-semibold text-text mb-1">Belum ada struk AI</p>
+                <p className="text-[13px] text-text-secondary">Gunakan fitur Scan Resi AI untuk scan struk belanja dengan banyak item.</p>
+              </div>
+            ) : (
+              <div className="bg-surface rounded-card-lg border border-border overflow-hidden divide-y divide-border">
+                {groups.map((group) => (
+                  <TransactionGroupRow
+                    key={group.id}
+                    group={group}
+                    onDelete={handleDeleteGroup}
+                    isDeleting={deletingGroupId === group.id}
+                  />
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Tab: Transaksi */}
+        {activeTab === "transaksi" && (
+          <>
+        {/* Transaction List - Grouped by Date */}
         {Object.entries(grouped).map(([dateLabel, txs]) => (
           <div key={dateLabel}>
             <div className="text-[12px] font-semibold text-text-secondary mb-2 uppercase tracking-wide">
@@ -356,6 +467,7 @@ export default function RiwayatPage() {
             ))}
           </div>
         )}
+        </>)}
       </div>
 
       <BottomNav />

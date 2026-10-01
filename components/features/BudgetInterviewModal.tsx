@@ -47,32 +47,27 @@ interface BudgetInterviewModalProps {
   expenseCategories: CategoryDto[];
   perpetualFundPercent: number;
   onDone: () => void; // dipanggil setelah simpan sukses untuk trigger refresh
+  /** Kuota Susun Budget AI tersisa. Jika 0 → tampilkan paywall. */
+  aiBudgetQuota?: number;
+  /** Callback setelah quota dikonsumsi — untuk parent update state kuota. */
+  onQuotaConsumed?: (remaining: number) => void;
 }
 
-// Konstanta rate-limit sesi — disimpan di localStorage, bukan DB (PRD §2.2 & §5)
-const RATE_LIMIT_KEY = "ft_interview_sessions";
-const MAX_SESSIONS_PER_MONTH = 5;
-
-function getSessionCount(): number {
+// ─── Helper: konsumsi kuota AI budget via server ─────────────────────────────
+async function consumeAiBudgetQuota(): Promise<{ remaining: number } | { error: string }> {
   try {
-    const raw = localStorage.getItem(RATE_LIMIT_KEY);
-    if (!raw) return 0;
-    const data = JSON.parse(raw) as { month: string; count: number };
-    const currentMonth = new Date().toISOString().slice(0, 7); // "YYYY-MM"
-    if (data.month !== currentMonth) return 0;
-    return data.count;
+    const res = await fetch("/api/user/consume-quota", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "aiBudget" }),
+    });
+    const json = await res.json();
+    if (!res.ok || json.error) {
+      return { error: json.error?.message || "Gagal mengonsumsi kuota" };
+    }
+    return { remaining: json.data.aiBudgetQuota };
   } catch {
-    return 0;
-  }
-}
-
-function incrementSessionCount(): void {
-  try {
-    const currentMonth = new Date().toISOString().slice(0, 7);
-    const current = getSessionCount();
-    localStorage.setItem(RATE_LIMIT_KEY, JSON.stringify({ month: currentMonth, count: current + 1 }));
-  } catch {
-    // Abaikan jika localStorage tidak tersedia
+    return { error: "Gangguan koneksi" };
   }
 }
 
@@ -246,6 +241,8 @@ export const BudgetInterviewModal: React.FC<BudgetInterviewModalProps> = ({
   expenseCategories,
   perpetualFundPercent,
   onDone,
+  aiBudgetQuota,
+  onQuotaConsumed,
 }) => {
   const [phase, setPhase] = useState<InterviewPhase>("INTRO");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -330,9 +327,8 @@ export const BudgetInterviewModal: React.FC<BudgetInterviewModalProps> = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isListening]);
 
-  // Blok kuota: di-hide/dinonaktifkan sementara untuk fase uji coba
-  // const sessionCount = getSessionCount();
-  const isRateLimited = false;
+  // Cek kuota: jika aiBudgetQuota tersedia dan = 0, tampilkan paywall
+  const isQuotaExhausted = aiBudgetQuota !== undefined && aiBudgetQuota <= 0;
 
   // ── Kirim pesan ke AI ────────────────────────────────────────────────────────
 
@@ -417,12 +413,11 @@ export const BudgetInterviewModal: React.FC<BudgetInterviewModalProps> = ({
   // ── Mulai interview (Langkah 0 → 1) ─────────────────────────────────────────
 
   const handleStartInterview = useCallback(async () => {
-    if (isRateLimited) return;
-    // incrementSessionCount(); // dinonaktifkan sementara untuk uji coba
+    if (isQuotaExhausted) return;
     setPhase("TALKING");
     // Kirim dengan messages kosong → server return sapaan pembuka tanpa panggil Gemini
     await sendToAI([]);
-  }, [isRateLimited, sendToAI]);
+  }, [isQuotaExhausted, sendToAI]);
 
   // ── Mic toggle ───────────────────────────────────────────────────────────────
 
@@ -450,7 +445,7 @@ export const BudgetInterviewModal: React.FC<BudgetInterviewModalProps> = ({
         budgetLimit: parseCurrencyInput(editedBudgets[b.categoryId] ?? String(b.amount)),
       }));
 
-      // Cari apakah ada income yang disebut dalam percakapan
+      // Simpan budget
       const res = await fetch("/api/ai/budget-interview/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -466,6 +461,12 @@ export const BudgetInterviewModal: React.FC<BudgetInterviewModalProps> = ({
         setErrorMsg(json.error?.message || "Gagal menyimpan budget");
         setPhase("PROPOSING");
         return;
+      }
+
+      // Konsumsi kuota AI budget setelah berhasil simpan
+      const quotaResult = await consumeAiBudgetQuota();
+      if ("remaining" in quotaResult && onQuotaConsumed) {
+        onQuotaConsumed(quotaResult.remaining);
       }
 
       setPhase("DONE");
@@ -555,19 +556,40 @@ export const BudgetInterviewModal: React.FC<BudgetInterviewModalProps> = ({
                   </p>
                 </div>
 
-                {isRateLimited && (
-                  <div className="bg-expense/10 rounded-[14px] px-4 py-3">
-                    <p className="text-[12px] text-expense font-medium">
-                      Kamu sudah menggunakan fitur ini {MAX_SESSIONS_PER_MONTH}x bulan ini (batas maksimum). Coba lagi bulan depan.
+                {/* ── Paywall: kuota habis ── */}
+                {isQuotaExhausted && (
+                  <div className="bg-surface border border-border rounded-[16px] px-4 py-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">🔒</span>
+                      <p className="text-[13px] font-bold text-text">Kuota Habis</p>
+                    </div>
+                    <p className="text-[12px] text-text-secondary leading-relaxed">
+                      Kamu sudah menggunakan semua kuota <span className="font-semibold text-text">Susun Budget AI</span>.
+                      Beli paket untuk mendapatkan kuota tambahan.
                     </p>
+                    <a
+                      href="/dashboard/profil"
+                      className="flex items-center justify-center gap-1.5 w-full px-4 py-2.5 bg-primary text-white text-[13px] font-semibold rounded-[12px] hover:opacity-90 transition-opacity"
+                    >
+                      ✨ Lihat Paket
+                    </a>
                   </div>
                 )}
 
-                {expenseCategories.length === 0 && (
+                {/* Peringatan: belum ada kategori */}
+                {!isQuotaExhausted && expenseCategories.length === 0 && (
                   <div className="bg-budget-yellow/10 rounded-[14px] px-4 py-3">
                     <p className="text-[12px] text-budget-yellow font-medium">
                       Kamu belum punya kategori pengeluaran. Buat dulu di menu Kategori agar AI bisa menyusun budget per kategori.
                     </p>
+                  </div>
+                )}
+
+                {/* Info sisa kuota */}
+                {!isQuotaExhausted && aiBudgetQuota !== undefined && (
+                  <div className="bg-primary/5 border border-primary/15 rounded-[14px] px-4 py-2.5 flex items-center justify-between">
+                    <span className="text-[12px] text-text-secondary">Sisa kuota Susun Budget AI</span>
+                    <span className="text-[13px] font-bold text-primary">{aiBudgetQuota}x</span>
                   </div>
                 )}
               </div>
@@ -577,7 +599,7 @@ export const BudgetInterviewModal: React.FC<BudgetInterviewModalProps> = ({
                   variant="primary"
                   fullWidth
                   onClick={handleStartInterview}
-                  disabled={isRateLimited || expenseCategories.length === 0}
+                  disabled={isQuotaExhausted || expenseCategories.length === 0}
                   id="btn-start-interview"
                 >
                   Mulai Percakapan

@@ -2,10 +2,16 @@ import { createClient } from "./supabase/server";
 import { prisma } from "./prisma";
 import { cookies } from "next/headers";
 
+import { generateUserCode } from "./userCode";
+
 export interface CurrentUser {
   id: string;
   email: string;
   name?: string | null;
+  userCode?: string | null;
+  ocrQuota?: number;
+  aiBudgetQuota?: number;
+  tier?: string;
 }
 
 // In-memory cache persisten di globalThis agar ensureUserAndDefaults tidak membebani database di setiap request
@@ -34,6 +40,10 @@ export async function ensureUserAndDefaults(userId: string, email: string, name?
           id: userId,
           email,
           name: name || "Pengguna",
+          userCode: generateUserCode(),
+          ocrQuota: 3,
+          aiBudgetQuota: 1,
+          tier: "FREE",
           wallets: {
             create: [
               {
@@ -60,6 +70,14 @@ export async function ensureUserAndDefaults(userId: string, email: string, name?
               { name: "Bonus / Lainnya", type: "INCOME" },
             ],
           },
+        },
+      });
+    } else if (!(existingUser as unknown as { userCode?: string | null }).userCode) {
+      // Auto-assign userCode jika belum ada (misal akun lama)
+      await prisma.user.update({
+        where: { id: existingUser.id },
+        data: {
+          userCode: generateUserCode(),
         },
       });
     }
@@ -105,10 +123,15 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       if (user && !error) {
         const email = user.email || `${user.id}@user.local`;
         await ensureUserAndDefaults(user.id, email, user.user_metadata?.name);
+        const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
         return {
           id: user.id,
           email,
           name: user.user_metadata?.name || null,
+          userCode: dbUser?.userCode || null,
+          ocrQuota: dbUser?.ocrQuota ?? 3,
+          aiBudgetQuota: dbUser?.aiBudgetQuota ?? 1,
+          tier: dbUser?.tier || "FREE",
         };
       }
 
@@ -124,11 +147,16 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     const fallbackId = "demo-user-123";
     const fallbackEmail = "demo@financetracker.local";
     await ensureUserAndDefaults(fallbackId, fallbackEmail, "Demo User");
+    const dbUser = await prisma.user.findUnique({ where: { id: fallbackId } });
 
     return {
       id: fallbackId,
       email: fallbackEmail,
       name: "Demo User",
+      userCode: dbUser?.userCode || "FT-84920",
+      ocrQuota: dbUser?.ocrQuota ?? 3,
+      aiBudgetQuota: dbUser?.aiBudgetQuota ?? 1,
+      tier: dbUser?.tier || "FREE",
     };
   }
 

@@ -23,6 +23,7 @@ import { formatCurrency } from "@/lib/currency";
 import { AnimatedBalance } from "@/components/ui/AnimatedBalance";
 import { ParsedVoiceResult } from "@/lib/parseVoiceAmount";
 import { useAppData } from "@/lib/context/AppDataContext";
+import { AiReceiptScannerModal } from "@/components/features/AiReceiptScannerModal";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -41,9 +42,11 @@ export default function DashboardPage() {
   // Modals state
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+  const [isAiScanOpen, setIsAiScanOpen] = useState(false);
   const [isSimAOpen, setIsSimAOpen] = useState(false);
   const [preFillData, setPreFillData] = useState<PreFillTransactionData | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
+  const [ocrQuota, setOcrQuota] = useState(0);
   const [userPercent, setUserPercent] = useState<number>(10);
   const [incomeSuggestion, setIncomeSuggestion] = useState<{
     incomeAmount: number;
@@ -107,10 +110,19 @@ export default function DashboardPage() {
 
     const loadSettingsAndCache = async () => {
       try {
-        const res = await fetch("/api/user/settings");
-        const json = await res.json();
-        if (json.data?.perpetualFundPercent) {
-          setUserPercent(json.data.perpetualFundPercent);
+        const [settingsRes, profileRes] = await Promise.all([
+          fetch("/api/user/settings"),
+          fetch("/api/user/profile"),
+        ]);
+        const [settingsJson, profileJson] = await Promise.all([
+          settingsRes.json(),
+          profileRes.json(),
+        ]);
+        if (settingsJson.data?.perpetualFundPercent) {
+          setUserPercent(settingsJson.data.perpetualFundPercent);
+        }
+        if (profileJson.data?.ocrQuota !== undefined) {
+          setOcrQuota(profileJson.data.ocrQuota);
         }
       } catch {
         // Fallback default 10%
@@ -334,6 +346,17 @@ export default function DashboardPage() {
           </span>
           <h1 className="text-[18px] font-bold text-text">Dashboard</h1>
         </div>
+        <Link
+          href="/dashboard/profil"
+          id="btn-open-profile"
+          className="w-9 h-9 rounded-full bg-chip flex items-center justify-center text-primary hover:bg-field transition-colors"
+          aria-label="Buka Profil"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
+        </Link>
       </div>
 
       {/* Banner Pasif Reminder Cicilan Jatuh Tempo H-3 per PRD_ASET_UTANG §2.3 */}
@@ -489,6 +512,20 @@ export default function DashboardPage() {
           <CameraIcon className="w-4 h-4 text-primary" />
           <span>Scan Resi</span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => setIsAiScanOpen(true)}
+          className="flex items-center gap-2 px-4 py-2.5 bg-primary/10 text-primary rounded-control text-[14px] font-semibold hover:bg-primary/20 active:scale-95 transition-all"
+          aria-label="Scan Struk AI Multi-Item"
+          title="Scan AI"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+          <span>Scan AI</span>
+        </button>
       </div>
 
       {/* Riwayat Transaksi Terbaru */}
@@ -543,6 +580,20 @@ export default function DashboardPage() {
         onClose={() => setIsReceiptModalOpen(false)}
         onParsedResult={handleReceiptResult}
         activeWalletId={activeWalletId || (wallets[0]?.id ?? "")}
+      />
+
+      {/* Modal Scan Resi AI Multi-Item */}
+      <AiReceiptScannerModal
+        isOpen={isAiScanOpen}
+        onClose={() => setIsAiScanOpen(false)}
+        activeWalletId={activeWalletId || (wallets[0]?.id ?? "")}
+        categories={categories}
+        ocrQuota={ocrQuota}
+        onSaved={(_newBalance, remainingQuota) => {
+          setOcrQuota(remainingQuota);
+          refreshData(true);
+          setNotification("Struk berhasil disimpan sebagai grup transaksi!");
+        }}
       />
 
       {/* Modal Simulator A saat lewati 3x per PRD §3.2 & §3.3 */}

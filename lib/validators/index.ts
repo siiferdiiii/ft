@@ -210,3 +210,27 @@ export const updateDebtSchema = z.object({
   isPaidOff: z.boolean().optional(),
 });
 
+export const updateCredentialsSchema = z
+  .object({
+    email: z.string().email("Format email baru tidak valid").trim().toLowerCase().optional().or(z.literal("")),
+    password: z.string().min(6, "Password minimal 6 karakter").optional().or(z.literal("")),
+  })
+  .refine((data) => Boolean(data.email || data.password), {
+    message: "Masukkan email baru atau kata sandi baru untuk disimpan",
+  });
+
+export const multiTransactionItemSchema = z.object({
+  note: z.string().min(1, "Nama produk/item wajib diisi").max(100),
+  amount: z.number().positive("Nominal item harus lebih dari 0").max(100_000_000_000),
+  categoryId: z.string().nullable().optional(),
+});
+
+export const multiTransactionSchema = z.object({
+  walletId: z.string().min(1, "Dompet wajib dipilih"),
+  merchant: z.string().max(80).nullable().optional(),
+  note: z.string().max(200).nullable().optional(),
+  receiptImageUrl: z.string().nullable().optional(),
+  transactionDate: z.string().optional(),
+  items: z.array(multiTransactionItemSchema).min(1, "Minimal ada 1 transaksi item"),
+});
+

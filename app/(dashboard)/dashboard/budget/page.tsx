@@ -35,17 +35,23 @@ export default function BudgetPage() {
   // AI Interview modal state
   const [isInterviewOpen, setIsInterviewOpen] = useState(false);
   const [perpetualFundPercent, setPerpetualFundPercent] = useState(10);
+  const [aiBudgetQuota, setAiBudgetQuota] = useState<number | undefined>(undefined);
 
-  // Fetch perpetualFundPercent dari user settings untuk dikirim ke modal AI
+  // Fetch perpetualFundPercent dan aiBudgetQuota secara paralel
   useEffect(() => {
-    fetch("/api/user/settings")
-      .then((r) => r.json())
-      .then((json) => {
-        if (json.data?.perpetualFundPercent) {
-          setPerpetualFundPercent(json.data.perpetualFundPercent);
+    Promise.all([
+      fetch("/api/user/settings").then((r) => r.json()),
+      fetch("/api/user/profile").then((r) => r.json()),
+    ])
+      .then(([settingsJson, profileJson]) => {
+        if (settingsJson.data?.perpetualFundPercent) {
+          setPerpetualFundPercent(settingsJson.data.perpetualFundPercent);
+        }
+        if (profileJson.data?.aiBudgetQuota !== undefined) {
+          setAiBudgetQuota(profileJson.data.aiBudgetQuota);
         }
       })
-      .catch(() => { /* abaikan jika gagal, default 10% sudah memadai */ });
+      .catch(() => { /* abaikan jika gagal, default sudah memadai */ });
   }, []);
 
   const handleOpenEdit = (category: CategoryDto) => setSelectedCategory(category);
@@ -325,6 +331,8 @@ export default function BudgetPage() {
         onClose={() => setIsInterviewOpen(false)}
         expenseCategories={categories}
         perpetualFundPercent={perpetualFundPercent}
+        aiBudgetQuota={aiBudgetQuota}
+        onQuotaConsumed={(remaining) => setAiBudgetQuota(remaining)}
         onDone={() => refreshData(true)}
       />
 

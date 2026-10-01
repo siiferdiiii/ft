@@ -31,11 +31,28 @@ const createMockPrisma = () => {
           ) || null
         );
       },
-      async create({ data }: { data: { id: string; email: string; name?: string | null; perpetualFundPercent?: number } }) {
+      async create({
+        data,
+      }: {
+        data: {
+          id: string;
+          email: string;
+          name?: string | null;
+          userCode?: string | null;
+          ocrQuota?: number;
+          aiBudgetQuota?: number;
+          tier?: string;
+          perpetualFundPercent?: number;
+        };
+      }) {
         const u = {
           id: data.id,
           email: data.email,
           name: data.name || null,
+          userCode: data.userCode || null,
+          ocrQuota: data.ocrQuota ?? 3,
+          aiBudgetQuota: data.aiBudgetQuota ?? 1,
+          tier: data.tier || "FREE",
           perpetualFundPercent: data.perpetualFundPercent ?? 10,
           createdAt: new Date(),
         };
@@ -48,14 +65,40 @@ const createMockPrisma = () => {
       }: {
         where: { id: string };
         data: {
+          email?: string;
           name?: string;
+          userCode?: string;
+          ocrQuota?: number | { increment?: number; decrement?: number };
+          aiBudgetQuota?: number | { increment?: number; decrement?: number };
+          tier?: string;
           perpetualFundPercent?: number;
         };
       }) {
         const user = mockDb.users.find((u) => u.id === where.id);
         if (!user) throw new Error("User not found");
+        if (data.email !== undefined) user.email = data.email;
         if (data.name !== undefined) user.name = data.name;
+        if (data.userCode !== undefined) user.userCode = data.userCode;
+        if (data.tier !== undefined) user.tier = data.tier;
         if (data.perpetualFundPercent !== undefined) user.perpetualFundPercent = data.perpetualFundPercent;
+        if (data.ocrQuota !== undefined) {
+          if (typeof data.ocrQuota === "number") {
+            user.ocrQuota = data.ocrQuota;
+          } else if (data.ocrQuota.increment) {
+            user.ocrQuota += data.ocrQuota.increment;
+          } else if (data.ocrQuota.decrement) {
+            user.ocrQuota = Math.max(0, user.ocrQuota - data.ocrQuota.decrement);
+          }
+        }
+        if (data.aiBudgetQuota !== undefined) {
+          if (typeof data.aiBudgetQuota === "number") {
+            user.aiBudgetQuota = data.aiBudgetQuota;
+          } else if (data.aiBudgetQuota.increment) {
+            user.aiBudgetQuota += data.aiBudgetQuota.increment;
+          } else if (data.aiBudgetQuota.decrement) {
+            user.aiBudgetQuota = Math.max(0, user.aiBudgetQuota - data.aiBudgetQuota.decrement);
+          }
+        }
         return user;
       },
     },
@@ -292,10 +335,12 @@ const createMockPrisma = () => {
         return list.map((t) => {
           const w = mockDb.wallets.find((wallet) => wallet.id === t.walletId);
           const c = mockDb.categories.find((cat) => cat.id === t.categoryId);
+          const g = t.groupId ? mockDb.transactionGroups.find((grp) => grp.id === t.groupId) : null;
           return {
             ...t,
             wallet: w ? { name: w.name } : null,
             category: c ? { name: c.name } : null,
+            group: g ? { id: g.id, merchant: g.merchant, totalAmount: g.totalAmount } : null,
           };
         });
       },
@@ -313,6 +358,7 @@ const createMockPrisma = () => {
           userId: string;
           walletId: string;
           categoryId?: string | null;
+          groupId?: string | null;
           type: "INCOME" | "EXPENSE";
           amount: number;
           note?: string | null;
@@ -323,10 +369,11 @@ const createMockPrisma = () => {
         };
       }) {
         const newTx = {
-          id: `tx-${Date.now()}`,
+          id: `tx-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
           userId: data.userId,
           walletId: data.walletId,
           categoryId: data.categoryId || null,
+          groupId: data.groupId || null,
           type: data.type,
           amount: data.amount,
           note: data.note || null,
@@ -339,11 +386,34 @@ const createMockPrisma = () => {
         mockDb.transactions.push(newTx);
         const w = mockDb.wallets.find((wallet) => wallet.id === newTx.walletId);
         const c = mockDb.categories.find((cat) => cat.id === newTx.categoryId);
+        const g = newTx.groupId ? mockDb.transactionGroups.find((grp) => grp.id === newTx.groupId) : null;
         return {
           ...newTx,
           wallet: w ? { name: w.name } : null,
           category: c ? { name: c.name } : null,
+          group: g ? { id: g.id, merchant: g.merchant, totalAmount: g.totalAmount } : null,
         };
+      },
+      async createMany({ data }: { data: any[] }) {
+        for (const item of data) {
+          const newTx = {
+            id: `tx-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            userId: item.userId,
+            walletId: item.walletId,
+            categoryId: item.categoryId || null,
+            groupId: item.groupId || null,
+            type: item.type,
+            amount: item.amount,
+            note: item.note || null,
+            source: item.source || "RECEIPT_SCAN",
+            rawInput: item.rawInput || null,
+            receiptImageUrl: item.receiptImageUrl || null,
+            transactionDate: item.transactionDate || new Date(),
+            createdAt: new Date(),
+          };
+          mockDb.transactions.push(newTx);
+        }
+        return { count: data.length };
       },
       async update({
         where,
@@ -804,6 +874,86 @@ const createMockPrisma = () => {
           return mockDb.debts.splice(idx, 1)[0];
         }
         throw new Error("Debt not found");
+      },
+    },
+
+    transactionGroup: {
+      async findMany({ where }: { where: { userId: string } }) {
+        const groups = mockDb.transactionGroups.filter((g) => g.userId === where.userId);
+        return groups.map((g) => {
+          const txs = mockDb.transactions.filter((t) => t.groupId === g.id);
+          const w = mockDb.wallets.find((wallet) => wallet.id === g.walletId);
+          return {
+            ...g,
+            wallet: w ? { name: w.name } : null,
+            transactions: txs.map((t) => {
+              const c = mockDb.categories.find((cat) => cat.id === t.categoryId);
+              return { ...t, category: c ? { name: c.name } : null };
+            }),
+          };
+        });
+      },
+      async findUnique({ where }: { where: { id: string } }) {
+        const g = mockDb.transactionGroups.find((item) => item.id === where.id);
+        if (!g) return null;
+        const txs = mockDb.transactions.filter((t) => t.groupId === g.id);
+        const w = mockDb.wallets.find((wallet) => wallet.id === g.walletId);
+        return {
+          ...g,
+          wallet: w ? { name: w.name } : null,
+          transactions: txs.map((t) => {
+            const c = mockDb.categories.find((cat) => cat.id === t.categoryId);
+            return { ...t, category: c ? { name: c.name } : null };
+          }),
+        };
+      },
+      async create({ data }: { data: any }) {
+        const newGroup = {
+          id: `tg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          userId: data.userId,
+          walletId: data.walletId,
+          totalAmount: typeof data.totalAmount === "number" ? data.totalAmount : Number(data.totalAmount),
+          merchant: data.merchant || null,
+          note: data.note || null,
+          receiptImageUrl: data.receiptImageUrl || null,
+          transactionDate: data.transactionDate || new Date(),
+          createdAt: new Date(),
+        };
+        mockDb.transactionGroups.push(newGroup);
+        return newGroup;
+      },
+      async delete({ where }: { where: { id: string } }) {
+        const idx = mockDb.transactionGroups.findIndex((item) => item.id === where.id);
+        if (idx !== -1) {
+          const removed = mockDb.transactionGroups.splice(idx, 1)[0];
+          mockDb.transactions = mockDb.transactions.filter((t) => t.groupId !== where.id);
+          return removed;
+        }
+        throw new Error("TransactionGroup not found");
+      },
+    },
+
+    purchaseOrder: {
+      async findUnique({ where }: { where: { orderId: string } }) {
+        return mockDb.purchaseOrders.find((p) => p.orderId === where.orderId) || null;
+      },
+      async findMany({ where }: { where: { userId: string } }) {
+        return mockDb.purchaseOrders.filter((p) => p.userId === where.userId);
+      },
+      async create({ data }: { data: any }) {
+        const newOrder = {
+          id: `po-${Date.now()}`,
+          userId: data.userId,
+          orderId: data.orderId,
+          productName: data.productName,
+          amount: typeof data.amount === "number" ? data.amount : Number(data.amount),
+          ocrQuotaAdded: data.ocrQuotaAdded ?? 0,
+          aiBudgetQuotaAdded: data.aiBudgetQuotaAdded ?? 0,
+          rawWebhookPayload: data.rawWebhookPayload || null,
+          createdAt: new Date(),
+        };
+        mockDb.purchaseOrders.push(newOrder);
+        return newOrder;
       },
     },
 

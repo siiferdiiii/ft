@@ -104,18 +104,23 @@ export async function GET(req: NextRequest) {
       include: {
         wallet: { select: { name: true } },
         category: { select: { name: true } },
+        group: { select: { id: true, merchant: true, totalAmount: true } },
       },
       orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }],
       take: Math.min(limit, 200),
       skip: offset,
     });
 
-    const result: TransactionDto[] = transactions.map((t) => ({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result: TransactionDto[] = (transactions as any[]).map((t) => ({
       id: t.id,
       walletId: t.walletId,
       walletName: t.wallet?.name,
       categoryId: t.categoryId,
       categoryName: t.category?.name || null,
+      groupId: t.groupId || null,
+      groupMerchant: t.group?.merchant || null,
+      groupTotalAmount: t.group ? Number(t.group.totalAmount) : null,
       type: t.type,
       amount: Number(t.amount),
       note: t.note,
