@@ -84,61 +84,74 @@ export async function POST(req: NextRequest) {
     const parsedDate = transactionDate ? new Date(transactionDate) : new Date();
 
     // Jalankan seluruh operasi dalam prisma.$transaction atomik
-    const result = await prisma.$transaction(async (tx) => {
-      // 1. Potong saldo dompet sebesar total belanja
-      const updatedWallet = await tx.wallet.update({
-        where: { id: walletId },
-        data: {
-          balance: { decrement: totalAmount },
-        },
-      });
+    // Timeout dinaikkan ke 15 detik untuk resi dengan banyak item
+    const keywordQueue: { categoryId: string; note: string }[] = [];
 
-      // 2. Buat grup transaksi belanja
-      const group = await tx.transactionGroup.create({
-        data: {
-          userId: user.id,
-          walletId,
-          totalAmount,
-          merchant: merchant || null,
-          note: note || (merchant ? `Belanja di ${merchant}` : "Belanja Multi-Item"),
-          receiptImageUrl: receiptImageUrl || null,
-          transactionDate: parsedDate,
-        },
-      });
+    const result = await prisma.$transaction(
+      async (tx) => {
+        // 1. Potong saldo dompet sebesar total belanja
+        const updatedWallet = await tx.wallet.update({
+          where: { id: walletId },
+          data: {
+            balance: { decrement: totalAmount },
+          },
+        });
 
-      // 3. Buat setiap item sebagai transaksi individual yang terhubung ke grup
-      const createdTransactions = [];
-      for (const item of items) {
-        const createdTx = await tx.transaction.create({
+        // 2. Buat grup transaksi belanja
+        const group = await tx.transactionGroup.create({
           data: {
             userId: user.id,
             walletId,
-            categoryId: item.categoryId || null,
-            groupId: group.id,
-            type: "EXPENSE",
-            amount: item.amount,
-            note: item.note,
-            source: "RECEIPT_SCAN",
-            rawInput: merchant ? `${merchant} - ${item.note}` : item.note,
+            totalAmount,
+            merchant: merchant || null,
+            note: note || (merchant ? `Belanja di ${merchant}` : "Belanja Multi-Item"),
             receiptImageUrl: receiptImageUrl || null,
             transactionDate: parsedDate,
           },
         });
 
-        createdTransactions.push(createdTx);
+        // 3. Buat setiap item sebagai transaksi individual yang terhubung ke grup
+        const createdTransactions = [];
+        for (const item of items) {
+          const createdTx = await tx.transaction.create({
+            data: {
+              userId: user.id,
+              walletId,
+              categoryId: item.categoryId || null,
+              groupId: group.id,
+              type: "EXPENSE",
+              amount: item.amount,
+              note: item.note,
+              source: "RECEIPT_SCAN",
+              rawInput: merchant ? `${merchant} - ${item.note}` : item.note,
+              receiptImageUrl: receiptImageUrl || null,
+              transactionDate: parsedDate,
+            },
+          });
 
-        // Pelajari kata kunci jika kategori ditentukan
-        if (item.categoryId) {
-          await recordItemCategoryKeywords(tx, user.id, item.categoryId, item.note);
+          createdTransactions.push(createdTx);
+
+          // Kumpulkan data keyword untuk diproses di luar transaksi
+          if (item.categoryId) {
+            keywordQueue.push({ categoryId: item.categoryId, note: item.note });
+          }
         }
-      }
 
-      return {
-        group,
-        transactions: createdTransactions,
-        newBalance: Number(updatedWallet.balance),
-      };
-    });
+        return {
+          group,
+          transactions: createdTransactions,
+          newBalance: Number(updatedWallet.balance),
+        };
+      },
+      { timeout: 15000 } // 15 detik — untuk resi dengan banyak item
+    );
+
+    // Keyword learning dijalankan di luar transaksi (non-kritis, tidak perlu atomic)
+    for (const { categoryId, note: itemNote } of keywordQueue) {
+      await recordItemCategoryKeywords(prisma, user.id, categoryId, itemNote).catch(() => {
+        // Abaikan error keyword — tidak boleh gagalkan transaksi utama
+      });
+    }
 
     return apiSuccess({
       message: `Berhasil mencatat ${items.length} item transaksi belanja ke grup.`,
