@@ -24,6 +24,7 @@ import { AnimatedBalance } from "@/components/ui/AnimatedBalance";
 import { ParsedVoiceResult } from "@/lib/parseVoiceAmount";
 import { useAppData } from "@/lib/context/AppDataContext";
 import { AiReceiptScannerModal } from "@/components/features/AiReceiptScannerModal";
+import { QuotaPaywallModal } from "@/components/features/QuotaPaywallModal";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -56,6 +57,8 @@ export default function DashboardPage() {
     }
     return 0;
   });
+  const [userCode, setUserCode] = useState<string | null>(null);
+  const [lowQuotaPaywallOpen, setLowQuotaPaywallOpen] = useState(false);
   const [userPercent, setUserPercent] = useState<number>(10);
   const [incomeSuggestion, setIncomeSuggestion] = useState<{
     incomeAmount: number;
@@ -129,6 +132,9 @@ export default function DashboardPage() {
           setOcrQuota(quota);
           // Cache ke localStorage agar tampil instan saat berikutnya
           try { localStorage.setItem("ft_cache_ocr_quota", String(quota)); } catch {}
+        }
+        if (profileJson.data?.userCode) {
+          setUserCode(profileJson.data.userCode);
         }
       } catch {
         // Fallback default 10%
@@ -595,13 +601,25 @@ export default function DashboardPage() {
         activeWalletId={activeWalletId || (wallets[0]?.id ?? "")}
         categories={categories}
         ocrQuota={ocrQuota}
+        userCode={userCode}
         onSaved={(_newBalance, remainingQuota) => {
           setOcrQuota(remainingQuota);
           // Update cache agar nilai terbaru tampil instan di kunjungan berikutnya
           try { localStorage.setItem("ft_cache_ocr_quota", String(remainingQuota)); } catch {}
           refreshData(true);
           setNotification("Struk berhasil disimpan sebagai grup transaksi!");
+          if (remainingQuota <= 1) {
+            setTimeout(() => setLowQuotaPaywallOpen(true), 750);
+          }
         }}
+      />
+
+      {/* Modal Paywall saat kuota scan menipis setelah simpan struk */}
+      <QuotaPaywallModal
+        isOpen={lowQuotaPaywallOpen}
+        onClose={() => setLowQuotaPaywallOpen(false)}
+        triggerSource="ocr_low"
+        userCode={userCode}
       />
 
       {/* Modal Simulator A saat lewati 3x per PRD §3.2 & §3.3 */}

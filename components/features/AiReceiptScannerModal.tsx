@@ -4,6 +4,7 @@ import React, { useState, useRef, useCallback } from "react";
 import { BottomSheet } from "../ui/BottomSheet";
 import { Button } from "../ui/Button";
 import { formatCurrency } from "@/lib/currency";
+import { QuotaPaywallModal } from "./QuotaPaywallModal";
 
 export interface MultiReceiptItem {
   name: string;
@@ -36,6 +37,7 @@ interface AiReceiptScannerModalProps {
   categories: Array<{ id: string; name: string; type: string }>;
   ocrQuota: number;
   onSaved: (newBalance: number, remainingQuota: number) => void;
+  userCode?: string | null;
 }
 
 export const AiReceiptScannerModal: React.FC<AiReceiptScannerModalProps> = ({
@@ -45,9 +47,11 @@ export const AiReceiptScannerModal: React.FC<AiReceiptScannerModalProps> = ({
   categories,
   ocrQuota,
   onSaved,
+  userCode,
 }) => {
   const [phase, setPhase] = useState<"upload" | "review" | "saving">("upload");
   const [isLoading, setIsLoading] = useState(false);
+  const [isPaywallOpen, setIsPaywallOpen] = useState(false);
   const [progress, setProgress] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [result, setResult] = useState<MultiReceiptResult | null>(null);
@@ -270,22 +274,33 @@ export const AiReceiptScannerModal: React.FC<AiReceiptScannerModalProps> = ({
           {phase === "upload" && (
             <>
               {/* Quota info */}
-              <div className={`flex items-center gap-3 p-3.5 rounded-control ${
+              <div className={`flex items-center justify-between p-3.5 rounded-control ${
                 ocrQuota > 0 ? "bg-primary/5 border border-primary/20" : "bg-expense/5 border border-expense/20"
               }`}>
-                <div className={`text-[22px] font-bold ${ocrQuota > 0 ? "text-primary" : "text-expense"}`}>
-                  {ocrQuota}
-                </div>
-                <div>
-                  <div className={`text-[12px] font-bold ${ocrQuota > 0 ? "text-primary" : "text-expense"}`}>
-                    {ocrQuota > 0 ? `${ocrQuota} Kuota Scan Tersisa` : "Kuota Habis"}
+                <div className="flex items-center gap-3">
+                  <div className={`text-[22px] font-bold ${ocrQuota > 0 ? "text-primary" : "text-expense"}`}>
+                    {ocrQuota}
                   </div>
-                  <div className="text-[11px] text-text-secondary">
-                    {ocrQuota > 0
-                      ? "1 kuota digunakan setiap kali scan"
-                      : "Beli paket di Halaman Profil untuk mengisi ulang"}
+                  <div>
+                    <div className={`text-[12px] font-bold ${ocrQuota > 0 ? "text-primary" : "text-expense"}`}>
+                      {ocrQuota > 0 ? `${ocrQuota} Kuota Scan Tersisa` : "Kuota Scan Habis"}
+                    </div>
+                    <div className="text-[11px] text-text-secondary">
+                      {ocrQuota > 0
+                        ? "1 kuota digunakan setiap kali scan"
+                        : "Isi kuota untuk scan nota belanja otomatis"}
+                    </div>
                   </div>
                 </div>
+                {ocrQuota <= 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setIsPaywallOpen(true)}
+                    className="shrink-0 bg-primary text-white text-[11px] font-bold px-3 py-1.5 rounded-full active:scale-95 transition-transform shadow-sm"
+                  >
+                    Beli Kuota →
+                  </button>
+                )}
               </div>
 
               {errorMessage && (
@@ -525,22 +540,32 @@ export const AiReceiptScannerModal: React.FC<AiReceiptScannerModalProps> = ({
         <div className="absolute bottom-0 left-0 right-0 px-5 pb-6 pt-3 bg-background border-t border-border">
           {phase === "upload" && !isLoading && (
             <div className="space-y-2">
-              <Button
-                variant="primary"
-                className="w-full"
-                disabled={ocrQuota <= 0}
-                onClick={() => cameraInputRef.current?.click()}
-              >
-                📷 Foto Struk
-              </Button>
-              <Button
-                variant="secondary"
-                className="w-full"
-                disabled={ocrQuota <= 0}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                🖼 Pilih dari Galeri
-              </Button>
+              {ocrQuota <= 0 ? (
+                <Button
+                  variant="primary"
+                  className="w-full shadow-mic-glow"
+                  onClick={() => setIsPaywallOpen(true)}
+                >
+                  ⚡ Aktifkan Kuota Scan (Mulai Rp9.900) →
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    variant="primary"
+                    className="w-full"
+                    onClick={() => cameraInputRef.current?.click()}
+                  >
+                    📷 Foto Struk
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    className="w-full"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    🖼 Pilih dari Galeri
+                  </Button>
+                </>
+              )}
             </div>
           )}
           {phase === "review" && (
@@ -560,6 +585,13 @@ export const AiReceiptScannerModal: React.FC<AiReceiptScannerModalProps> = ({
           )}
         </div>
       </div>
+
+      <QuotaPaywallModal
+        isOpen={isPaywallOpen}
+        onClose={() => setIsPaywallOpen(false)}
+        triggerSource="ocr_empty"
+        userCode={userCode}
+      />
     </BottomSheet>
   );
 };

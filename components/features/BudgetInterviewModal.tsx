@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/Button";
 import { formatCurrency, formatCurrencyInput, parseCurrencyInput } from "@/lib/currency";
 import { CategoryDto } from "@/lib/types";
+import { QuotaPaywallModal } from "@/components/features/QuotaPaywallModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,6 +52,7 @@ interface BudgetInterviewModalProps {
   aiBudgetQuota?: number;
   /** Callback setelah quota dikonsumsi — untuk parent update state kuota. */
   onQuotaConsumed?: (remaining: number) => void;
+  userCode?: string | null;
 }
 
 // ─── Helper: konsumsi kuota AI budget via server ─────────────────────────────
@@ -243,8 +245,10 @@ export const BudgetInterviewModal: React.FC<BudgetInterviewModalProps> = ({
   onDone,
   aiBudgetQuota,
   onQuotaConsumed,
+  userCode,
 }) => {
   const [phase, setPhase] = useState<InterviewPhase>("INTRO");
+  const [isPaywallOpen, setIsPaywallOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [aiReply, setAiReply] = useState<string>("");
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -561,18 +565,20 @@ export const BudgetInterviewModal: React.FC<BudgetInterviewModalProps> = ({
                   <div className="bg-surface border border-border rounded-[16px] px-4 py-4 space-y-3">
                     <div className="flex items-center gap-2">
                       <span className="text-lg">🔒</span>
-                      <p className="text-[13px] font-bold text-text">Kuota Habis</p>
+                      <p className="text-[13px] font-bold text-text">Kuota Susun Budget Habis</p>
                     </div>
                     <p className="text-[12px] text-text-secondary leading-relaxed">
                       Kamu sudah menggunakan semua kuota <span className="font-semibold text-text">Susun Budget AI</span>.
-                      Beli paket untuk mendapatkan kuota tambahan.
+                      Beli paket kuota untuk melanjutkan sesi konsultasi budget bersama Fin.
                     </p>
-                    <a
-                      href="/dashboard/profil"
-                      className="flex items-center justify-center gap-1.5 w-full px-4 py-2.5 bg-primary text-white text-[13px] font-semibold rounded-[12px] hover:opacity-90 transition-opacity"
+                    <button
+                      type="button"
+                      id="btn-paywall-budget"
+                      onClick={() => setIsPaywallOpen(true)}
+                      className="flex items-center justify-center gap-1.5 w-full px-4 py-3 bg-primary text-white text-[13px] font-bold rounded-[12px] hover:opacity-90 active:scale-[0.98] transition-all shadow-[0_4px_14px_rgba(78,68,229,0.3)]"
                     >
-                      ✨ Lihat Paket
-                    </a>
+                      ✨ Beli Kuota Budget (Mulai Rp9.900) →
+                    </button>
                   </div>
                 )}
 
@@ -942,6 +948,13 @@ export const BudgetInterviewModal: React.FC<BudgetInterviewModalProps> = ({
 
         </div>
       </div>
+
+      <QuotaPaywallModal
+        isOpen={isPaywallOpen}
+        onClose={() => setIsPaywallOpen(false)}
+        triggerSource="budget_empty"
+        userCode={userCode}
+      />
     </div>
   );
 };

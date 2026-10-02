@@ -36,6 +36,7 @@ export default function BudgetPage() {
   const [isInterviewOpen, setIsInterviewOpen] = useState(false);
   const [perpetualFundPercent, setPerpetualFundPercent] = useState(10);
   const [aiBudgetQuota, setAiBudgetQuota] = useState<number | undefined>(undefined);
+  const [userCode, setUserCode] = useState<string | null>(null);
 
   // Fetch perpetualFundPercent dan aiBudgetQuota secara paralel
   useEffect(() => {
@@ -49,6 +50,9 @@ export default function BudgetPage() {
         }
         if (profileJson.data?.aiBudgetQuota !== undefined) {
           setAiBudgetQuota(profileJson.data.aiBudgetQuota);
+        }
+        if (profileJson.data?.userCode) {
+          setUserCode(profileJson.data.userCode);
         }
       })
       .catch(() => { /* abaikan jika gagal, default sudah memadai */ });
@@ -332,6 +336,7 @@ export default function BudgetPage() {
         expenseCategories={categories}
         perpetualFundPercent={perpetualFundPercent}
         aiBudgetQuota={aiBudgetQuota}
+        userCode={userCode}
         onQuotaConsumed={(remaining) => setAiBudgetQuota(remaining)}
         onDone={() => refreshData(true)}
       />
