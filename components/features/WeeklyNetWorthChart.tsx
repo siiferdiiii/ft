@@ -61,7 +61,8 @@ export const WeeklyNetWorthChart: React.FC<WeeklyNetWorthChartProps> = ({
   const span = rawMax - rawMin || 1;
 
   // Margin buffer 15% atas & bawah agar kurva tidak menempel di tepi
-  const minY = Math.max(0, rawMin - span * 0.1);
+  // Izinkan nilai negatif (net worth bisa minus jika utang > aset)
+  const minY = rawMin - span * 0.1;
   const maxY = rawMax + span * 0.15;
   const yRange = maxY - minY || 1;
 
@@ -96,7 +97,10 @@ export const WeeklyNetWorthChart: React.FC<WeeklyNetWorthChartProps> = ({
     data: item,
   }));
 
-  // Generator kurva Bezier halus
+  // Generator kurva Bezier halus dengan control point yang dibatasi dalam area chart
+  const clampY = (y: number) =>
+    Math.max(padTop, Math.min(padTop + chartHeight, y));
+
   const generateSmoothPath = (
     pts: Array<{ x: number; y: number }>
   ): string => {
@@ -111,9 +115,9 @@ export const WeeklyNetWorthChart: React.FC<WeeklyNetWorthChartProps> = ({
       const p3 = pts[i + 2 >= pts.length ? i + 1 : i + 2];
 
       const cp1x = p1.x + (p2.x - p0.x) / 6;
-      const cp1y = p1.y + (p2.y - p0.y) / 6;
+      const cp1y = clampY(p1.y + (p2.y - p0.y) / 6);
       const cp2x = p2.x - (p3.x - p1.x) / 6;
-      const cp2y = p2.y - (p3.y - p1.y) / 6;
+      const cp2y = clampY(p2.y - (p3.y - p1.y) / 6);
 
       path += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(
         1
@@ -288,9 +292,19 @@ export const WeeklyNetWorthChart: React.FC<WeeklyNetWorthChartProps> = ({
 
         <svg
           viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-          className="w-full h-auto overflow-visible select-none"
+          className="w-full h-auto overflow-hidden select-none"
         >
           <defs>
+            {/* Clip area grafik agar kurva tidak meluap ke luar batas */}
+            <clipPath id="chart-clip">
+              <rect
+                x={padLeft}
+                y={padTop}
+                width={chartWidth}
+                height={chartHeight}
+              />
+            </clipPath>
+
             {/* Gradient Net Worth */}
             <linearGradient id="grad-net-worth" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#4E44E5" stopOpacity="0.22" />
@@ -343,39 +357,42 @@ export const WeeklyNetWorthChart: React.FC<WeeklyNetWorthChartProps> = ({
             />
           )}
 
-          {/* Area Fill Total Assets */}
-          {(viewMode === "both" || viewMode === "totalAssets") && (
-            <path d={totalAssetsArea} fill="url(#grad-total-assets)" />
-          )}
+          {/* Semua kurva & area dibungkus dalam clipPath agar tidak meluap */}
+          <g clipPath="url(#chart-clip)">
+            {/* Area Fill Total Assets */}
+            {(viewMode === "both" || viewMode === "totalAssets") && (
+              <path d={totalAssetsArea} fill="url(#grad-total-assets)" />
+            )}
 
-          {/* Area Fill Net Worth */}
-          {(viewMode === "both" || viewMode === "netWorth") && (
-            <path d={netWorthArea} fill="url(#grad-net-worth)" />
-          )}
+            {/* Area Fill Net Worth */}
+            {(viewMode === "both" || viewMode === "netWorth") && (
+              <path d={netWorthArea} fill="url(#grad-net-worth)" />
+            )}
 
-          {/* Kurva Garis Total Assets */}
-          {(viewMode === "both" || viewMode === "totalAssets") && (
-            <path
-              d={totalAssetsLine}
-              fill="none"
-              stroke="#16A34A"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          )}
+            {/* Kurva Garis Total Assets */}
+            {(viewMode === "both" || viewMode === "totalAssets") && (
+              <path
+                d={totalAssetsLine}
+                fill="none"
+                stroke="#16A34A"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            )}
 
-          {/* Kurva Garis Net Worth */}
-          {(viewMode === "both" || viewMode === "netWorth") && (
-            <path
-              d={netWorthLine}
-              fill="none"
-              stroke="#4E44E5"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          )}
+            {/* Kurva Garis Net Worth */}
+            {(viewMode === "both" || viewMode === "netWorth") && (
+              <path
+                d={netWorthLine}
+                fill="none"
+                stroke="#4E44E5"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            )}
+          </g>
 
           {/* Titik Data Total Assets */}
           {(viewMode === "both" || viewMode === "totalAssets") &&
