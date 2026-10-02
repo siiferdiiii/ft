@@ -39,7 +39,7 @@ export const PRODUCT_PACKAGES: ProductPackage[] = [
     // Ganti dengan env var di .env.local: NEXT_PUBLIC_LYNK_URL_HEMAT
     lynkUrl:
       process.env.NEXT_PUBLIC_LYNK_URL_HEMAT ||
-      "http://lynk.id/werctvgybuhjn/3woxvvvmq01g/checkout",
+      "http://lynk.id/werctvgybuhjn/q7dq9rx00xzz/checkout",
     description: "Cocok untuk kamu yang ingin mencoba fitur AI sebelum beli paket lebih besar.",
     features: [
       "20x Scan Resi AI Multi-Item",
@@ -54,12 +54,11 @@ export const PRODUCT_PACKAGES: ProductPackage[] = [
     name: "Paket Reguler",
     badge: "Terlaris",
     popular: true,
-    comingSoon: true,
     price: 24900,
     ocrQuota: 60,
     aiBudgetQuota: 10,
     tier: "PRO",
-    lynkUrl: process.env.NEXT_PUBLIC_LYNK_URL_REGULER || "",
+    lynkUrl: process.env.NEXT_PUBLIC_LYNK_URL_REGULER || "http://lynk.id/werctvgybuhjn/3woxvvvmq01g/checkout",
     description: "Paket terlaris untuk pengguna aktif yang sering belanja banyak item.",
     features: [
       "60x Scan Resi AI Multi-Item",
